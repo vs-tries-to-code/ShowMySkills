@@ -18,7 +18,8 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useSidebar } from "@/context/SidebarContext";
-import { notificationService, authService } from "@/services/apiClient";
+import { notificationService } from "@/services/apiClient";
+import { getUserRole, useAuth } from "@/hooks/useAuth";
 
 export default function DashboardHeader({
   title,
@@ -31,22 +32,10 @@ export default function DashboardHeader({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [planToast, setPlanToast] = useState("");
-  const [user, setUser] = useState(null);
+  const { user, authResolved, hasSession } = useAuth();
 
   useEffect(() => {
     let isMounted = true;
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("user");
-        if (stored) setUser(JSON.parse(stored));
-      } catch {}
-    }
-    authService.getCurrentUser().then((res) => {
-      if (isMounted && res) {
-        setUser(res);
-      }
-    }).catch(() => {});
-
     notificationService.list().then((res) => {
       if (isMounted && res && Array.isArray(res)) {
         setNotifications(res);
@@ -86,17 +75,25 @@ export default function DashboardHeader({
     notificationService.markRead();
   };
 
-  const role = pathname.startsWith("/company")
+  const routeRole = pathname.startsWith("/company")
     ? "company"
     : pathname.startsWith("/admin")
     ? "admin"
+    : pathname.startsWith("/college")
+    ? "college"
     : pathname.startsWith("/student")
     ? "student"
-    : "guest";
+    : null;
+  const userRole = getUserRole(user);
+  const role = authResolved && !hasSession
+    ? "guest"
+    : userRole || routeRole;
 
   const displayTitle =
     title ||
-    (role === "guest"
+    (role == null
+      ? ""
+      : role === "guest"
       ? "Explore Opportunities"
       : role === "company"
       ? (user?.companyProfile?.companyName ? `Welcome back, ${user.companyProfile.companyName}` : (user?.name ? `Welcome back, ${user.name}` : "Welcome back"))
@@ -109,6 +106,8 @@ export default function DashboardHeader({
   const displaySubtitle =
     subtitle !== undefined
       ? subtitle
+      : role == null
+      ? null
       : role === "guest"
       ? "Browse verified tech internships, peer projects, and student innovators"
       : role === "company"
@@ -148,7 +147,7 @@ export default function DashboardHeader({
 
       {/* ──── Right: Action Controls ──── */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {role === "guest" ? (
+        {role == null ? null : role === "guest" ? (
           <>
             <Link
               href="/login"
