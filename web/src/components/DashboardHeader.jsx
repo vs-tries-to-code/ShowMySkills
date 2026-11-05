@@ -123,23 +123,23 @@ export default function DashboardHeader({
       className="sticky top-0 z-30 px-4 sm:px-8 py-2.5 sm:py-3 flex items-center justify-between border-b border-gray-100 bg-[#F7F9F9]/85 backdrop-blur-md shrink-0"
     >
       {/* ──── Left: Hamburger Button + Greeting ──── */}
-      <div className="flex items-center gap-2.5 sm:gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
         {/* Mobile Hamburger Drawer Trigger */}
         <button
           onClick={toggleSidebar}
           aria-label="Toggle navigation menu"
           id="mobile-sidebar-toggle-btn"
-          className="md:hidden p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-100 text-gray-700 transition-colors cursor-pointer shadow-2xs"
+          className="md:hidden p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-100 text-gray-700 transition-colors cursor-pointer shadow-2xs shrink-0"
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        <div>
-          <h1 className="text-base sm:text-xl font-bold text-gray-900 leading-tight">
+        <div className="min-w-0 pr-1">
+          <h1 className="text-sm sm:text-xl font-bold text-gray-900 leading-tight truncate">
             {displayTitle}
           </h1>
           {displaySubtitle && (
-            <p className="text-[11px] sm:text-xs text-gray-500 font-medium mt-0.5 line-clamp-1">
+            <p className="text-[10px] sm:text-xs text-gray-500 font-medium mt-0.5 line-clamp-1 truncate">
               {displaySubtitle}
             </p>
           )}
@@ -147,20 +147,20 @@ export default function DashboardHeader({
       </div>
 
       {/* ──── Right: Action Controls ──── */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         {role === "guest" ? (
           <>
             <Link
               href="/login"
               id="header-guest-login-btn"
-              className="px-3.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold text-[#4B9C93] border border-[#4B9C93] hover:bg-[#4B9C93]/5 transition-colors cursor-pointer"
+              className="px-2.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold text-[#4B9C93] border border-[#4B9C93] hover:bg-[#4B9C93]/5 transition-colors cursor-pointer whitespace-nowrap"
             >
               Log In
             </Link>
             <Link
               href="/signup"
               id="header-guest-signup-btn"
-              className="px-3.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold text-white bg-[#4B9C93] hover:bg-[#3d867e] shadow-xs transition-colors cursor-pointer"
+              className="px-2.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold text-white bg-[#4B9C93] hover:bg-[#3d867e] shadow-xs transition-colors cursor-pointer whitespace-nowrap"
             >
               Sign Up
             </Link>
