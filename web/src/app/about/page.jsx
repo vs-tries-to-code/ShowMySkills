@@ -9,8 +9,17 @@ import {
   Target,
   ArrowRight,
 } from "lucide-react";
+import {
+  getUserDashboardPath,
+  getUserInternshipsPath,
+  useAuth,
+} from "@/hooks/useAuth";
 
 export default function AboutPage() {
+  const { user, authResolved, hasSession } = useAuth();
+  const accountPath = getUserDashboardPath(user);
+  const internshipsPath = getUserInternshipsPath(user);
+
   return (
     <div className="min-h-screen bg-[#4B9C93] flex flex-col font-sans selection:text-white">
       {/* ──── Top Public Header Bar ──── */}
@@ -18,13 +27,13 @@ export default function AboutPage() {
         {/* Right-aligned Navigation Links */}
         <nav className="flex items-center gap-2 sm:gap-4">
           <Link
-            href="/"
+            href={hasSession ? accountPath : "/"}
             className="text-white/90 hover:text-white px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-medium hover:bg-white/10 transition-colors"
           >
-            Home
+            {hasSession ? "My Dashboard" : "Home"}
           </Link>
           <Link
-            href="/internships"
+            href={internshipsPath}
             className="text-white/90 hover:text-white px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-medium hover:bg-white/10 transition-colors"
           >
             Internships
@@ -41,12 +50,14 @@ export default function AboutPage() {
           >
             Launchpad
           </Link>
-          <Link
-            href="/login"
-            className="ml-1 sm:ml-2 px-5 py-2 rounded-full bg-white text-[#0F172A] hover:bg-[#F7F9F9] active:scale-95 text-xs sm:text-sm font-semibold shadow-xs transition-all"
-          >
-            Sign In
-          </Link>
+          {authResolved && (
+            <Link
+              href={hasSession ? accountPath : "/login"}
+              className="ml-1 sm:ml-2 px-5 py-2 rounded-full bg-white text-[#0F172A] hover:bg-[#F7F9F9] active:scale-95 text-xs sm:text-sm font-semibold shadow-xs transition-all"
+            >
+              {hasSession ? "My Account" : "Sign In"}
+            </Link>
+          )}
         </nav>
       </header>
 
@@ -461,7 +472,7 @@ export default function AboutPage() {
             </Link>
             <span>•</span>
             <Link
-              href="/student/internships"
+              href={internshipsPath}
               className="hover:text-[#4B9C93] transition-colors"
             >
               Internships
@@ -481,12 +492,14 @@ export default function AboutPage() {
               Launchpad
             </Link>
             <span>•</span>
-            <Link
-              href="/login"
-              className="hover:text-[#4B9C93] transition-colors"
-            >
-              Sign In
-            </Link>
+            {authResolved && (
+              <Link
+                href={hasSession ? accountPath : "/login"}
+                className="hover:text-[#4B9C93] transition-colors"
+              >
+                {hasSession ? "My Account" : "Sign In"}
+              </Link>
+            )}
           </div>
         </div>
       </footer>
