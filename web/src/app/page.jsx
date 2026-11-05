@@ -3,9 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Star, Zap, FileText, MessageCircle } from "lucide-react";
+import {
+  getUserDashboardPath,
+  getUserInternshipsPath,
+  useAuth,
+} from "@/hooks/useAuth";
 
 export default function LandingPage() {
   const [starCount, setStarCount] = useState(8);
+  const { user, authResolved, hasSession } = useAuth();
+  const accountPath = getUserDashboardPath(user);
+  const internshipsPath = getUserInternshipsPath(user);
 
   useEffect(() => {
     fetch("https://api.github.com/repos/xyphx/ShowMySkills-system")
@@ -53,18 +61,31 @@ export default function LandingPage() {
               <span className="tabular-nums font-bold text-base">{starCount}</span>
             </span>
           </a>
-          <Link
-            href="/login"
-            className="h-10 sm:h-11 px-4 sm:px-5 flex items-center justify-center cursor-pointer text-white/90 hover:text-white font-medium text-sm sm:text-base transition-colors"
-          >
-            Log In
-          </Link>
-          <Link
-            href="/signup"
-            className="h-10 sm:h-11 px-5 sm:px-6 flex items-center justify-center cursor-pointer bg-white hover:bg-[#F7F9F9] active:scale-95 text-[#181E29] rounded-full font-semibold text-sm sm:text-base transition-all shadow-xs"
-          >
-            Sign Up
-          </Link>
+          {authResolved && (
+            hasSession ? (
+              <Link
+                href={accountPath}
+                className="h-10 sm:h-11 px-5 sm:px-6 flex items-center justify-center cursor-pointer bg-white hover:bg-[#F7F9F9] active:scale-95 text-[#181E29] rounded-full font-semibold text-sm sm:text-base transition-all shadow-xs"
+              >
+                My Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="h-10 sm:h-11 px-4 sm:px-5 flex items-center justify-center cursor-pointer text-white/90 hover:text-white font-medium text-sm sm:text-base transition-colors"
+                >
+                  Log In
+                </Link>
+                <Link
+                  href="/signup"
+                  className="h-10 sm:h-11 px-5 sm:px-6 flex items-center justify-center cursor-pointer bg-white hover:bg-[#F7F9F9] active:scale-95 text-[#181E29] rounded-full font-semibold text-sm sm:text-base transition-all shadow-xs"
+                >
+                  Sign Up
+                </Link>
+              </>
+            )
+          )}
         </div>
       </nav>
 
@@ -151,11 +172,11 @@ export default function LandingPage() {
               More
             </Link>
             <Link
-              href="/internships"
+              href={hasSession ? accountPath : internshipsPath}
               id="landing-get-started-btn"
               className="cursor-pointer bg-[#4B9C93] hover:bg-[#3d867e] active:scale-95 text-white px-6 sm:px-9 py-2 sm:py-3 rounded-full text-sm sm:text-lg font-semibold transition-all"
             >
-              Get Started
+              {hasSession ? "My Dashboard" : "Get Started"}
             </Link>
           </div>
         </div>
