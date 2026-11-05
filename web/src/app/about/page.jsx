@@ -61,12 +61,6 @@ export default function AboutPage() {
             Launchpad
           </Link>
           <Link
-            href="/signup/company"
-            className="text-white/90 hover:text-white px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium hover:bg-white/10 transition-colors hidden md:inline-block"
-          >
-            For Companies
-          </Link>
-          <Link
             href="/login"
             className="ml-1 px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full bg-white text-[#0F172A] hover:bg-[#F7F9F9] active:scale-95 text-xs sm:text-sm font-semibold shadow-xs transition-all whitespace-nowrap"
           >
@@ -274,7 +268,7 @@ export default function AboutPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 mt-8 sm:mt-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 mt-8 sm:mt-12">
             {/* For Students */}
             <div className="bg-[#F8FAFC] border border-slate-200/80 rounded-2xl p-6 sm:p-8 flex flex-col justify-between">
               <div>
@@ -293,28 +287,6 @@ export default function AboutPage() {
                 className="mt-6 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-[#4B9C93] hover:underline"
               >
                 <span>Join as a Student</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-
-            {/* For Companies */}
-            <div className="bg-[#F8FAFC] border border-slate-200/80 rounded-2xl p-6 sm:p-8 flex flex-col justify-between">
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#2563EB] bg-[#DBEAFE] px-2.5 py-1 rounded-full">
-                  For Companies
-                </span>
-                <h3 className="text-lg sm:text-xl font-bold text-[#101828] mt-4">
-                  Discover Talent & Post Internships
-                </h3>
-                <p className="mt-2 text-xs sm:text-sm text-[#4A5565] leading-relaxed">
-                  Find the exact talent you&apos;re looking for. Discover verified student profiles, publish internship openings, and manage candidate pipelines efficiently.
-                </p>
-              </div>
-              <Link
-                href="/signup/company"
-                className="mt-6 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-[#2563EB] hover:underline"
-              >
-                <span>Join as a Company</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
@@ -685,10 +657,6 @@ export default function AboutPage() {
             <span>•</span>
             <Link href="/launchpad" className="hover:text-[#4B9C93] transition-colors">
               Launchpad
-            </Link>
-            <span>•</span>
-            <Link href="/signup/company" className="hover:text-[#4B9C93] transition-colors">
-              For Companies
             </Link>
             <span>•</span>
             <Link href="/login" className="hover:text-[#4B9C93] transition-colors">
