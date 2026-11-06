@@ -11,6 +11,26 @@ export const authController = {
     }
   },
 
+  sendOtp: async (req, res, next) => {
+    try {
+      const { email } = req.body;
+      const result = await userService.sendSignupOtp(email);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  verifyOtp: async (req, res, next) => {
+    try {
+      const { email, otp } = req.body;
+      const result = await userService.verifySignupOtp(email, otp);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+
   register: async (req, res, next) => {
     try {
       const newUser = await userService.createUser({

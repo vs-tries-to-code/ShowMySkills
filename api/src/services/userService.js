@@ -1,9 +1,21 @@
+import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import { generateOtp } from '../utils/otp.js';
 import { emailService } from './emailService.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
+import { OtpVerification } from '../models/OtpVerification.js';
+
+const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const RATE_LIMIT_COOLDOWN_MS = 60 * 1000; // 60 seconds between resends
+const MAX_OTP_ATTEMPTS = 5;
+const MAX_RESENDS_WINDOW = 5;
+const RESEND_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+const hashOtp = (otp) => {
+  return crypto.createHash('sha256').update(String(otp).trim()).digest('hex');
+};
 
 const getJwtSecrets = () => {
   const jwtSecret = process.env.JWT_SECRET || 'dev_secret_key_showmyskills_2026';
@@ -219,6 +231,7 @@ export const userService = {
       companyName = '',
       website = '',
       collegeName = '',
+      verificationToken = null,
     } = userData;
 
     const normalizedEmail = String(email).trim().toLowerCase();
@@ -231,6 +244,22 @@ export const userService = {
       const error = new Error('Email is already registered');
       error.statusCode = 409;
       throw error;
+    }
+
+    let isEmailPreVerified = false;
+    if (verificationToken) {
+      const otpRecord = await OtpVerification.findOne({
+        target: normalizedEmail,
+        type: 'signup_email',
+        verified: true,
+        verificationToken,
+        used: false,
+      });
+      if (otpRecord) {
+        isEmailPreVerified = true;
+        otpRecord.used = true;
+        await otpRecord.save();
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -248,8 +277,9 @@ export const userService = {
       graduationYear: graduationYear ? Number(graduationYear) : null,
       collegeId,
       collegeIdDocument,
-      emailVerificationOtp: otp,
-      emailVerificationOtpExpires: otpExpiresAt,
+      emailVerified: isEmailPreVerified,
+      emailVerificationOtp: isEmailPreVerified ? null : otp,
+      emailVerificationOtpExpires: isEmailPreVerified ? null : otpExpiresAt,
     };
 
     if (role === 'company') {
@@ -266,10 +296,12 @@ export const userService = {
 
     const user = await User.create(userPayload);
 
-    try {
-      await emailService.sendVerificationOtp(normalizedEmail, otp);
-    } catch (e) {
-      console.warn('Email dispatch failed, continuing:', e.message);
+    if (!isEmailPreVerified) {
+      try {
+        await emailService.sendVerificationOtp(normalizedEmail, otp);
+      } catch (e) {
+        console.warn('Email dispatch failed, continuing:', e.message);
+      }
     }
 
     const userResponse = user.toObject();
@@ -277,7 +309,158 @@ export const userService = {
     delete userResponse.emailVerificationOtp;
     delete userResponse.emailVerificationOtpExpires;
 
+    if (isEmailPreVerified) {
+      const tokens = await generateTokenPair(user);
+      return {
+        ...userResponse,
+        ...tokens,
+        token: tokens.accessToken,
+        user: userResponse,
+      };
+    }
+
     return userResponse;
+  },
+
+  sendSignupOtp: async (email) => {
+    if (!email || !email.includes('@')) {
+      const err = new Error('A valid email address is required');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      const err = new Error('Email is already registered. Please log in.');
+      err.statusCode = 409;
+      throw err;
+    }
+
+    const existingOtp = await OtpVerification.findOne({
+      target: normalizedEmail,
+      type: 'signup_email',
+    });
+
+    const now = new Date();
+
+    if (existingOtp) {
+      const elapsedSinceLastSend = now.getTime() - existingOtp.lastSentAt.getTime();
+      if (elapsedSinceLastSend < RATE_LIMIT_COOLDOWN_MS) {
+        const remainingSec = Math.ceil(
+          (RATE_LIMIT_COOLDOWN_MS - elapsedSinceLastSend) / 1000
+        );
+        const err = new Error(
+          `Please wait ${remainingSec} seconds before requesting a new code.`
+        );
+        err.statusCode = 429;
+        throw err;
+      }
+
+      const isWithinResendWindow =
+        now.getTime() - existingOtp.updatedAt.getTime() < RESEND_WINDOW_MS;
+      if (isWithinResendWindow && existingOtp.resendCount >= MAX_RESENDS_WINDOW) {
+        const err = new Error(
+          'Maximum resend attempts reached. Please try again after 15 minutes.'
+        );
+        err.statusCode = 429;
+        throw err;
+      }
+    }
+
+    const plainOtp = generateOtp();
+    const otpHash = hashOtp(plainOtp);
+    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
+
+    await OtpVerification.findOneAndUpdate(
+      { target: normalizedEmail, type: 'signup_email' },
+      {
+        otpHash,
+        expiresAt,
+        attempts: 0,
+        resendCount: existingOtp ? existingOtp.resendCount + 1 : 1,
+        lastSentAt: now,
+        verified: false,
+        verifiedAt: null,
+        used: false,
+        verificationToken: null,
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    try {
+      await emailService.sendVerificationOtp(normalizedEmail, plainOtp);
+    } catch (e) {
+      console.warn('[UserService] Email dispatch failed, continuing:', e.message);
+    }
+
+    return {
+      success: true,
+      message: 'Verification code sent to your email address.',
+    };
+  },
+
+  verifySignupOtp: async (email, otp) => {
+    if (!email || !otp) {
+      const err = new Error('Email and verification code are required');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const cleanOtp = String(otp).trim();
+
+    const record = await OtpVerification.findOne({
+      target: normalizedEmail,
+      type: 'signup_email',
+    });
+
+    if (!record) {
+      const err = new Error('No OTP found. Please request a new verification code.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const now = new Date();
+
+    if (record.expiresAt < now) {
+      const err = new Error('Verification code has expired. Please request a new code.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (record.attempts >= MAX_OTP_ATTEMPTS) {
+      const err = new Error('Too many failed attempts. Code invalidated. Please request a new code.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const inputHash = hashOtp(cleanOtp);
+    if (inputHash !== record.otpHash) {
+      record.attempts += 1;
+      await record.save();
+      const remainingAttempts = Math.max(0, MAX_OTP_ATTEMPTS - record.attempts);
+      const err = new Error(
+        remainingAttempts > 0
+          ? `Invalid verification code. ${remainingAttempts} attempts remaining.`
+          : 'Invalid verification code. Maximum attempts reached. Please request a new code.'
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    record.verified = true;
+    record.verifiedAt = now;
+    record.verificationToken = verificationToken;
+    await record.save();
+
+    return {
+      success: true,
+      message: 'Email verified successfully.',
+      verificationToken,
+    };
   },
 
   verifyEmailOtp: async (email, otp) => {
