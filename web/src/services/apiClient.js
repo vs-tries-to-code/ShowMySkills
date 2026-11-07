@@ -360,6 +360,14 @@ export const authService = {
     return apiRequest("/auth/me", "PUT", profileData);
   },
 
+  sendSignupOtp: async (email) => {
+    return apiRequest("/auth/send-otp", "POST", { email });
+  },
+
+  verifySignupOtp: async (email, otp) => {
+    return apiRequest("/auth/verify-otp", "POST", { email, otp });
+  },
+
   verifyEmail: async (email, otp) => {
     const res = await apiRequest("/auth/verify-email", "POST", { email, otp });
     if (res?.data?.accessToken || res?.data?.token) {
