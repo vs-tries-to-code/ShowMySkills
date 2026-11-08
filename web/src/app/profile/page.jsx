@@ -9,7 +9,7 @@ import ReputationCard from "@/features/profile/ReputationCard";
 import AboutCard from "@/features/profile/AboutCard";
 import SkillsCard from "@/features/profile/SkillsCard";
 import ProjectsCard from "@/features/profile/ProjectsCard";
-import { authService, peopleService } from "@/services/apiClient";
+import { authService } from "@/services/apiClient";
 
 function formatProfileData(u) {
   if (!u) return null;
@@ -53,13 +53,7 @@ export default function StudentProfilePage() {
     let isMounted = true;
     async function loadProfile() {
       try {
-        let user = await authService.getCurrentUser();
-        if (!user) {
-          const students = await peopleService.list({ role: "student", limit: 1 });
-          if (students && students.length > 0) {
-            user = students[0];
-          }
-        }
+        const user = await authService.getCurrentUser();
         if (isMounted && user) {
           setData(formatProfileData(user));
         }

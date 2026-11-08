@@ -21,6 +21,7 @@ import {
   Award,
 } from "lucide-react";
 import { useSidebar } from "@/context/SidebarContext";
+import { getUserRole, useAuth } from "@/hooks/useAuth";
 
 /**
  * DashboardSidebar — Dynamic multi-role sidebar for ShowMySkills.
@@ -29,9 +30,10 @@ import { useSidebar } from "@/context/SidebarContext";
 export default function DashboardSidebar() {
   const pathname = usePathname() || "";
   const { isOpen, closeSidebar } = useSidebar();
+  const { user, authResolved, hasSession } = useAuth();
 
   // Determine current active role from route path
-  const role = pathname.startsWith("/company")
+  const routeRole = pathname.startsWith("/company")
     ? "company"
     : pathname.startsWith("/admin")
     ? "admin"
@@ -39,7 +41,11 @@ export default function DashboardSidebar() {
     ? "college"
     : pathname.startsWith("/student")
     ? "student"
-    : "guest";
+    : null;
+  const userRole = getUserRole(user);
+  const role = authResolved && !hasSession
+    ? "guest"
+    : userRole || routeRole;
 
   // Top navigation items per role
   let topNavItems = [];
@@ -94,7 +100,7 @@ export default function DashboardSidebar() {
       { label: "About Us", href: "/about", icon: Info },
       { label: "Settings", href: "/settings", icon: Settings },
     ];
-  } else {
+  } else if (role === "student") {
     // Default: Student Portal
     topNavItems = [
       { label: "Internships", href: "/student/internships", icon: Briefcase },
@@ -179,7 +185,7 @@ export default function DashboardSidebar() {
           <span className="text-2xl font-extrabold text-white tracking-tight leading-tight">
             ShowMySkills
           </span>
-          {role !== "student" && (
+          {role && role !== "student" && (
             <span className="mt-1 px-2.5 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full bg-white/20 text-white">
               {role}
             </span>
