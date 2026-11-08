@@ -325,11 +325,75 @@ export default function DashboardHeader({
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
               Active Node
             </span>
-            <div
-              id="header-avatar"
-              className="w-9 h-9 rounded-full bg-[#A10C00] text-white flex items-center justify-center text-xs font-bold cursor-pointer"
-            >
-              AD
+            {/* Interactive Admin Avatar & Profile Dropdown */}
+            <div className="relative" ref={profileRef}>
+              <button
+                onClick={() => setShowProfileMenu((prev) => !prev)}
+                id="header-avatar-btn"
+                aria-label="Admin Profile Menu"
+                className="w-9 h-9 rounded-full bg-[#A10C00] text-white flex items-center justify-center text-xs font-bold cursor-pointer hover:ring-2 hover:ring-red-700/30 transition-all shadow-xs"
+              >
+                {user?.name ? user.name.charAt(0).toUpperCase() : "AD"}
+              </button>
+
+              {/* Profile Dropdown Menu */}
+              {showProfileMenu && (
+                <div className="absolute right-0 top-11 w-60 bg-white rounded-2xl shadow-xl border border-gray-100 p-2 z-50">
+                  {/* User Info Header */}
+                  <div className="p-3 bg-gray-50 rounded-xl mb-1.5">
+                    <div className="font-bold text-xs text-gray-900 truncate">
+                      {user?.name || "Admin User"}
+                    </div>
+                    <div className="text-[11px] text-gray-500 truncate">
+                      {user?.email || "Account Active"}
+                    </div>
+                    <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      <ShieldCheck className="w-2.5 h-2.5" />
+                      Admin Node Active
+                    </span>
+                  </div>
+
+                  {/* Menu Links */}
+                  <div className="space-y-0.5">
+                    <Link
+                      href="/admin/dashboard"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      <LayoutDashboard className="w-4 h-4 text-gray-400" />
+                      <span>Admin Dashboard</span>
+                    </Link>
+                    <Link
+                      href="/settings"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      <Settings className="w-4 h-4 text-gray-400" />
+                      <span>Account Settings</span>
+                    </Link>
+                    <Link
+                      href="/help"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      <HelpCircle className="w-4 h-4 text-gray-400" />
+                      <span>Help & Support</span>
+                    </Link>
+                  </div>
+
+                  <div className="my-1 border-t border-gray-100" />
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    id="header-logout-btn"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer text-left"
+                  >
+                    <LogOut className="w-4 h-4 text-red-500" />
+                    <span>Log Out</span>
+                  </button>
+                </div>
+              )}
             </div>
           </>
         ) : (
