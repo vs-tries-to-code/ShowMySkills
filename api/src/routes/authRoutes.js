@@ -202,6 +202,9 @@ router.post('/login', authRateLimiter, validateLogin, authController.login);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
+router.post('/send-otp', otpRateLimiter, authController.sendOtp);
+router.post('/verify-otp', otpRateLimiter, authController.verifyOtp);
+
 router.post(
   '/register',
   authRateLimiter,

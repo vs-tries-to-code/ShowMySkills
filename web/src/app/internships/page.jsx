@@ -1,76 +1,49 @@
-  "use client";
+"use client";
 
-  import { useCallback, useEffect, useRef, useState } from "react";
-  import { AnimatePresence, motion } from "framer-motion";
-  import {
-    Search,
-    SlidersHorizontal,
-    X,
-    Bookmark,
-    Check,
-    RotateCcw,
-    MapPin,
-    CalendarDays,
-    Wallet,
-    Monitor,
-    ExternalLink,
-    Trash2,
-    CheckCircle,
-    Briefcase,
-    Building2,
-    BadgeCheck,
-  } from "lucide-react";
-
-  import DashboardSidebar from "@/components/DashboardSidebar";
-  import DashboardHeader from "@/components/DashboardHeader";
-  import InternshipCard from "@/features/internships/InternshipCard";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  buildInternshipPageQuery,
-  clearDiscoveryFilters,
-  createPageRequestRegistry,
-  getDiscoveryViewState,
-  getDiscoveryErrorMessage,
-  getNextInternshipPage,
-  isValidInternshipPage,
-  mergeUniqueInternships,
-  retryDiscoveryPage,
-  shouldPrefetchInternships,
-} from "@/features/internships/feedUtils.mjs";
- import { apiRequest, tokenStorage } from "@/services/apiClient";
+  Search,
+  SlidersHorizontal,
+  X,
+  Bookmark,
+  Check,
+  RotateCcw,
+  MapPin,
+  CalendarDays,
+  Wallet,
+  Monitor,
+  ExternalLink,
+  Trash2,
+  CheckCircle,
+  Briefcase,
+  Building2,
+  BadgeCheck,
+} from "lucide-react";
 
-  // Format stipend range or single amount
-  function formatStipend(item) {
-    const min = item.stipendMin;
-    const max = item.stipendMax;
+import DashboardSidebar from "@/components/DashboardSidebar";
+import DashboardHeader from "@/components/DashboardHeader";
+import InternshipCard from "@/features/internships/InternshipCard";
+import { tokenStorage } from "@/services/apiClient";
+import {
+  formatStipend,
+  mapInternship,
+  shuffleInternships,
+  deduplicateInternships,
+  extractStudentStatusSets,
+  filterCycleInternships,
+  buildInternshipQueryParams,
+  determineEmptyReason,
+  fetchUserStatusSets,
+  removeSavedAndRejectInternship,
+} from "@/lib/internshipDeck";
 
-    if (min != null && max != null) {
-      return `₹${Number(min).toLocaleString("en-IN")} - ₹${Number(
-        max
-      ).toLocaleString("en-IN")}`;
-    } else if (min != null) {
-      return `₹${Number(min).toLocaleString("en-IN")}`;
-    } else if (max != null) {
-      return `₹${Number(max).toLocaleString("en-IN")}`;
-    }
-    return "Not specified";
-  }
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
-  // Convert backend internship fields into the card format.
-  function mapInternship(item) {
-    const min = item.stipendMin;
-    const max = item.stipendMax;
-
-    let stipend = "Not specified";
-
-    if (min != null && max != null) {
-      stipend = `${Number(min).toLocaleString("en-IN")} - ${Number(
-        max
-      ).toLocaleString("en-IN")}`;
-    } else if (min != null) {
-      stipend = Number(min).toLocaleString("en-IN");
-    } else if (max != null) {
-      stipend = Number(max).toLocaleString("en-IN");
-    }
+// Persist an internship action through the authenticated backend API.
+async function saveInternshipAction(internshipId, action) {
+  const token = tokenStorage.getAccessToken();
 
     return {
       id: item._id,
@@ -111,56 +84,26 @@ async function saveInternshipAction(internshipId, action) {
   return result.data;
 }
 
-  // Read this user's previous actions so acted-on cards stay out of the deck
-  // after a refresh. If no token is available, the public feed still loads.
- // Read previous actions using the shared API client.
-async function getActionedInternshipIds() {
-  if (!tokenStorage.getAccessToken()) {
-  return new Set();
-}
-  try {
-    const result = await apiRequest("/internship-actions/my-actions");
+const EMPTY_FILTERS = {
+  mode: "",
+  location: "",
+  skill: "",
+  verified: "",
+};
 
-    if (!result.success || !Array.isArray(result.data)) {
-      return new Set();
-    }
-
-    return new Set(
-      result.data
-        .filter(
-          (item) =>
-            item.decision === "accepted" ||
-            item.decision === "rejected" ||
-            item.saved === true
-        )
-        .map((item) => {
-          const internship = item.internship;
-
-          return typeof internship === "string"
-            ? internship
-            : internship?._id;
-        })
-        .filter(Boolean)
-    );
-  } catch (error) {
-    console.error("Unable to restore internship actions:", error);
-    return new Set();
-  }
-}
-  const EMPTY_FILTERS = {
-    mode: "",
-    location: "",
-    skill: "",
-    verified: "",
-  };
-
-  export default function InternshipsPage() {
-    const [cards, setCards] = useState([]);
-    const [allInternships, setAllInternships] = useState([]);
-
-    const [activeTab, setActiveTab] = useState("Internships");
-    const [searchQuery, setSearchQuery] = useState("");
-    const [searchPending, setSearchPending] = useState(false);
+export default function InternshipsPage() {
+  const [cards, setCards] = useState([]);
+  const [allInternships, setAllInternships] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1,
+    hasNextPage: false,
+  });
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
+  const [emptyDeckReason, setEmptyDeckReason] = useState(null);
 
     const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(true);
@@ -182,8 +125,20 @@ async function getActionedInternshipIds() {
     const [loading, setLoading] = useState(true);
     const [apiError, setApiError] = useState("");
 
-    const [myActions, setMyActions] = useState([]);
-    const [loadingActions, setLoadingActions] = useState(false);
+  // Reject confirmation dialog for currently saved internships
+  const [rejectConfirmCard, setRejectConfirmCard] = useState(null);
+  const [isRejectingSaved, setIsRejectingSaved] = useState(false);
+
+  // Track card IDs already presented in the current browsing cycle to prevent duplicates across pages
+  const seenIdsInCycleRef = useRef(new Set());
+
+  // Fetch user's saved and accepted actions
+  const fetchMyActions = useCallback(async () => {
+    const token = tokenStorage.getAccessToken();
+    if (!token) {
+      setMyActions([]);
+      return;
+    }
 
     // Fetch user's saved and accepted actions using the shared API client.
 const fetchMyActions = useCallback(async () => {
@@ -194,158 +149,33 @@ const fetchMyActions = useCallback(async () => {
     return;
   }
 
-  try {
-    setLoadingActions(true);
+  // Fetch active internships starting from page 1, annotating saved/applied markers and optionally shuffling
+  const fetchInternships = useCallback(async (filterValues = {}, shouldShuffle = false) => {
+    try {
+      setLoading(true);
+      setApiError("");
+      setButtonSwipeDirection(null);
 
-    const result = await apiRequest(
-      "/internship-actions/my-actions"
-    );
+      const token = tokenStorage.getAccessToken();
+      const statusSets = await fetchUserStatusSets(API_URL, token);
 
-    if (!mounted.current) return;
-    if (result.success && Array.isArray(result.data)) {
-      setMyActions(result.data);
-    } else {
-      setMyActions([]);
-    }
-  } catch (error) {
-    if (mounted.current) console.error("Failed to load user actions.");
-  } finally {
-    if (mounted.current) setLoadingActions(false);
-  }
-}, []);
-    // Fetch internships using the backend-supported query parameters.
-  // Fetch internships with pagination support.
-  const fetchInternships = useCallback(
-    async (filterValues = {}, page = 1, append = false, version = null) => {
-      const requestVersionAtStart = append
-        ? (version ?? requestVersion.current)
-        : ++requestVersion.current;
-      if (append && !requestedPages.current.begin(requestVersionAtStart, page)) {
-        return;
-      }
-      try {
-        if (append) {
-          setLoadingMore(true);
-          setLoadMoreError(false);
-        } else {
-          requestedPages.current.clear();
-          setLoading(true);
-          setLoadingMore(false);
-          setCurrentPage(1);
-          setHasNextPage(true);
-          setApiError("");
-          setLoadMoreError(false);
-          setButtonSwipeDirection(null);
-        }
+      const activeSearch = (filterValues.search !== undefined ? filterValues.search : searchQuery).trim();
 
-        const params = buildInternshipPageQuery(filterValues, page, PAGE_LIMIT);
+      const queryString = buildInternshipQueryParams({
+        page: 1,
+        limit: 10,
+        filters: filterValues,
+        search: activeSearch,
+      });
 
-        const data = await apiRequest(`/internships?${params.toString()}`);
+      const url = `${API_URL}/internships${
+        queryString ? `?${queryString}` : ""
+      }`;
 
-        if (!isValidInternshipPage(data)) {
-          throw new Error("INVALID_RESPONSE");
-        }
+      const response = await fetch(url);
 
-        if (!mounted.current || requestVersionAtStart !== requestVersion.current) return;
-
-        const seenIds = new Set();
-        const mapped = data.data
-          .map(mapInternship)
-          .filter((item) => {
-            if (seenIds.has(item.id)) return false;
-            seenIds.add(item.id);
-            return true;
-          });
-
-        const actionedIds = await getActionedInternshipIds();
-        if (!mounted.current || requestVersionAtStart !== requestVersion.current) return;
-
-        const newInternships = mapped.filter(
-
-          (item) => !actionedIds.has(item.id)
-        );
-
-        if (append) {
-          setAllInternships((previous) =>
-            mergeUniqueInternships(previous, mapped)
-          );
-
-          setCards((previous) =>
-            mergeUniqueInternships(previous, newInternships)
-          );
-        } else {
-          setAllInternships(mapped);
-          setCards(newInternships);
-        }
-
-        setCurrentPage(page);
-        setHasNextPage(Boolean(data.pagination?.hasNextPage));
-      } catch (error) {
-        console.warn("Unable to load internships.");
-        if (!mounted.current || requestVersionAtStart !== requestVersion.current) return;
-
-        if (!append) {
-          setAllInternships([]);
-          setCards([]);
-          setApiError(getDiscoveryErrorMessage(error));
-        } else {
-          setLoadMoreError(true);
-          showToast("Unable to load more internships.");
-        }
-      } finally {
-        if (mounted.current && requestVersionAtStart === requestVersion.current) {
-          if (append) {
-            setLoadingMore(false);
-          } else {
-            setLoading(false);
-          }
-        }
-        if (append) requestedPages.current.finish(requestVersionAtStart, page);
-      }
-    },
-    []
-  );
-
-  // Load the next page when the current deck is almost finished.
-  const loadMoreInternships = useCallback(async () => {
-    if (loading || loadingMore || searchPending || !hasNextPage || apiError) {
-      return;
-    }
-
-    const nextPage = getNextInternshipPage(currentPage, hasNextPage);
-    if (nextPage === null) return;
-
-    await fetchInternships(
-      {
-        ...appliedFilters,
-      },
-      nextPage,
-      true
-    );
-  }, [
-    loading,
-    loadingMore,
-    searchPending,
-    hasNextPage,
-    apiError,
-    currentPage,
-    appliedFilters,
-    fetchInternships,
-  ]);
-    useEffect(() => {
-      mounted.current = true;
-      if (!initialFeedFetchStarted.current) {
-        initialFeedFetchStarted.current = true;
-        fetchInternships({ ...EMPTY_FILTERS, search: "" }, 1, false);
-      }
-      fetchMyActions();
-
-      if (typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search);
-        const tabParam = params.get("tab");
-        if (tabParam && tabParam.toLowerCase() === "saved") {
-          setActiveTab("Saved");
-        }
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
       }
       return () => {
         mounted.current = false;
@@ -359,16 +189,53 @@ const fetchMyActions = useCallback(async () => {
         setSearchPending(false);
         return;
       }
-      const timeoutId = setTimeout(() => {
-        const nextFilters = { ...appliedFilters, search: searchQuery };
-        setAppliedFilters(nextFilters);
-        fetchInternships(nextFilters, 1, false);
-        setSearchPending(false);
-      }, 300);
-      return () => clearTimeout(timeoutId);
-    }, [searchQuery, appliedFilters, fetchInternships]);
 
-    // Automatically fetch more internships when only 3 cards remain.
+      const paginationData = data.pagination || {
+        page: 1,
+        limit: 10,
+        total: data.data.length,
+        totalPages: 1,
+        hasNextPage: false,
+      };
+
+      const mapped = data.data
+        .filter((item) => item._id)
+        .map((item) => mapInternship(item, statusSets));
+
+      const deckCards = shouldShuffle ? shuffleInternships(mapped) : mapped;
+
+      // Reset seen IDs for the new browsing cycle
+      seenIdsInCycleRef.current = new Set(deckCards.map((c) => c.id));
+
+      setAllInternships(deckCards);
+      setCards(deckCards);
+      setPagination(paginationData);
+
+      const hasActiveFilters = Boolean(
+        activeSearch ||
+        filterValues.mode ||
+        filterValues.location?.trim() ||
+        filterValues.skill?.trim() ||
+        filterValues.verified
+      );
+
+      const reason = determineEmptyReason({
+        totalAvailable: paginationData.total != null ? paginationData.total : deckCards.length,
+        deckCount: deckCards.length,
+        hasFilters: hasActiveFilters,
+      });
+      setEmptyDeckReason(reason);
+    } catch (error) {
+      console.warn("Backend API unreachable:", error);
+      setAllInternships([]);
+      setCards([]);
+      setApiError("Unable to load internships from database server.");
+      setEmptyDeckReason("error");
+    } finally {
+      setLoading(false);
+    }
+  }, [searchQuery]);
+
   useEffect(() => {
     if (shouldPrefetchInternships({
       activeTab,
@@ -382,30 +249,69 @@ const fetchMyActions = useCallback(async () => {
     })) {
       loadMoreInternships();
     }
-  }, [
-    activeTab,
-    loading,
-    loadingMore,
-    hasNextPage,
-    apiError,
-    loadMoreError,
-    searchPending,
-    cards.length,
-    loadMoreInternships,
-  ]);
+  }, [fetchInternships, fetchMyActions]);
 
-    // Local search keeps the displayed cards responsive while typing.
-    const query = searchQuery.trim().toLowerCase();
+  // Load next batch when deck is running low
+  const loadMoreInternships = useCallback(async () => {
+    if (loadingMore || loading || !pagination.hasNextPage) return;
 
-    const filteredCards = cards.filter((card) => {
-      if (!query) return true;
+    try {
+      setLoadingMore(true);
+      const nextPage = pagination.page + 1;
+      const token = tokenStorage.getAccessToken();
+      const statusSets = await fetchUserStatusSets(API_URL, token);
 
-      return (
-        card.roleTitle.toLowerCase().includes(query) ||
-        card.companyName.toLowerCase().includes(query) ||
-        card.skills.some((skill) => skill.toLowerCase().includes(query))
-      );
-    });
+      const queryString = buildInternshipQueryParams({
+        page: nextPage,
+        limit: pagination.limit || 10,
+        filters,
+        search: searchQuery,
+      });
+
+      const url = `${API_URL}/internships${queryString ? `?${queryString}` : ""}`;
+      const response = await fetch(url);
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (!data.success || !Array.isArray(data.data)) return;
+
+      const nextPagination = data.pagination || {
+        page: nextPage,
+        limit: 10,
+        total: data.data.length,
+        totalPages: nextPage,
+        hasNextPage: false,
+      };
+
+      const mapped = data.data
+        .filter((item) => item._id)
+        .map((item) => mapInternship(item, statusSets));
+
+      const newlyEligible = filterCycleInternships(mapped, seenIdsInCycleRef.current);
+      const uniqueNewCards = deduplicateInternships(newlyEligible, seenIdsInCycleRef.current);
+
+      for (const card of uniqueNewCards) {
+        seenIdsInCycleRef.current.add(card.id);
+      }
+
+      if (uniqueNewCards.length > 0) {
+        setCards((prev) => [...prev, ...uniqueNewCards]);
+        setAllInternships((prev) => [...prev, ...uniqueNewCards]);
+      }
+
+      setPagination(nextPagination);
+    } catch (error) {
+      console.warn("Failed to load more internships:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [pagination, loadingMore, loading, filters, searchQuery]);
+
+  // Local search keeps the displayed cards responsive while typing.
+  const query = searchQuery.trim().toLowerCase();
+
+  const filteredCards = cards.filter((card) => {
+    if (!query) return true;
 
     // Filtered saved and accepted items
     const savedItems = myActions.filter(
@@ -452,9 +358,9 @@ const fetchMyActions = useCallback(async () => {
       }, 2500);
     };
 
-    // Persist card swipes before removing cards from the current deck.
-    const handleCardSwipe = async (direction) => {
-      if (buttonSwipeDirection) return;
+  // Persist card swipes before removing cards from the current deck.
+  const handleCardSwipe = async (direction) => {
+    if (buttonSwipeDirection || rejectConfirmCard || isRejectingSaved) return;
 
       const activeCard = filteredCards[0];
       if (!activeCard) return;
@@ -485,59 +391,50 @@ const fetchMyActions = useCallback(async () => {
       }
     };
 
-    // Persist button actions and keep the existing swipe animation.
-    const triggerButtonSwipe = async (direction) => {
-      if (
-        loading ||
-        apiError ||
-        !filteredCards.length ||
-        buttonSwipeDirection
-      ) {
-        return;
-      }
+    // If student chooses Reject/Skip on an internship that is currently saved, show confirmation dialog
+    if (action === "rejected" && activeCard.isSaved) {
+      setRejectConfirmCard(activeCard);
+      return;
+    }
 
-      const activeCard = filteredCards[0];
-      const actionMap = {
-        right: "accepted",
-        left: "rejected",
-        save: "saved",
-      };
-      const action = actionMap[direction];
-      if (!action) return;
-
-      setButtonSwipeDirection(direction);
-
-      try {
+    try {
+      if (action === "accepted" && activeCard.isApplied) {
+        showToast(`Already applied to ${activeCard.roleTitle}`);
+      } else {
         await saveInternshipAction(activeCard.id, action);
-
         const messages = {
           right: `Interested in ${activeCard.roleTitle}`,
           left: `Skipped ${activeCard.roleTitle}`,
           save: `Saved ${activeCard.roleTitle}`,
         };
         showToast(messages[direction]);
-        setCards((previousCards) =>
-          previousCards.filter((card) => card.id !== activeCard.id)
-        );
-        fetchMyActions();
-      } catch (error) {
-        showToast(error.message || "Unable to save internship action.");
-      } finally {
-        setButtonSwipeDirection(null);
       }
-    };
 
-    // Unsave an internship and update views
-    const handleUnsave = async (internshipId, roleTitle) => {
-      try {
-        await saveInternshipAction(internshipId, "unsaved");
-        showToast(`Removed "${roleTitle}" from saved`);
-        await fetchMyActions();
-        await fetchInternships();
-      } catch (error) {
-        showToast(error.message || "Unable to unsave internship.");
-      }
-    };
+      setCards((previousCards) => {
+        const remaining = previousCards.filter((card) => card.id !== activeCard.id);
+        if (remaining.length <= 2 && pagination.hasNextPage && !loadingMore) {
+          loadMoreInternships();
+        }
+        return remaining;
+      });
+      fetchMyActions();
+    } catch (error) {
+      showToast(error.message || "Unable to save internship action.");
+    }
+  };
+
+  // Persist button actions and keep the existing swipe animation.
+  const triggerButtonSwipe = async (direction) => {
+    if (
+      loading ||
+      apiError ||
+      !filteredCards.length ||
+      buttonSwipeDirection ||
+      rejectConfirmCard ||
+      isRejectingSaved
+    ) {
+      return;
+    }
 
     // Accept / express interest from saved view
     const handleAcceptFromSaved = async (internshipId, roleTitle) => {
@@ -551,41 +448,101 @@ const fetchMyActions = useCallback(async () => {
       }
     };
 
-    // Apply the selected filters and search term.
-    const handleApplyFilters = async () => {
-      setShowFilters(false);
-      const nextFilters = {
-        ...filters,
-        search: searchQuery,
-      };
-      setSearchPending(false);
-      setAppliedFilters(nextFilters);
-      await fetchInternships(nextFilters, 1, false);
-    };
+    // If student chooses Reject/Skip on an internship that is currently saved, show confirmation dialog
+    if (action === "rejected" && activeCard.isSaved) {
+      setRejectConfirmCard(activeCard);
+      return;
+    }
 
-    // Clear filters and reload the default listing.
-    const handleResetFilters = async () => {
-      await clearDiscoveryFilters({
-        setFilters,
-        setSearchQuery,
-        setSearchPending,
-        setShowFilters,
-        setAppliedFilters,
-        fetchInternships,
-        emptyFilters: EMPTY_FILTERS,
+    setButtonSwipeDirection(direction);
+
+    try {
+      if (action === "accepted" && activeCard.isApplied) {
+        showToast(`Already applied to ${activeCard.roleTitle}`);
+      } else {
+        await saveInternshipAction(activeCard.id, action);
+        const messages = {
+          right: `Interested in ${activeCard.roleTitle}`,
+          left: `Skipped ${activeCard.roleTitle}`,
+          save: `Saved ${activeCard.roleTitle}`,
+        };
+        showToast(messages[direction]);
+      }
+
+      setCards((previousCards) => {
+        const remaining = previousCards.filter((card) => card.id !== activeCard.id);
+        if (remaining.length <= 2 && pagination.hasNextPage && !loadingMore) {
+          loadMoreInternships();
+        }
+        return remaining;
       });
-    };
+      fetchMyActions();
+    } catch (error) {
+      showToast(error.message || "Unable to save internship action.");
+    } finally {
+      setButtonSwipeDirection(null);
+    }
+  };
 
-    // Reload the current listing without filters.
-    const handleReloadDeck = async () => {
-      setSearchQuery("");
-      setFilters({ ...EMPTY_FILTERS });
-      setSearchPending(false);
-      setAppliedFilters({ ...EMPTY_FILTERS, search: "" });
+  // Dialog actions for rejecting a saved internship
+  const handleKeepSaved = () => {
+    setRejectConfirmCard(null);
+  };
 
-      await fetchInternships();
+  const handleConfirmRemoveFromSavedAndReject = async () => {
+    if (!rejectConfirmCard || isRejectingSaved) return;
+    setIsRejectingSaved(true);
+
+    try {
+      await removeSavedAndRejectInternship(
+        rejectConfirmCard.id,
+        saveInternshipAction
+      );
+
+      showToast(`Removed from Saved and skipped ${rejectConfirmCard.roleTitle}`);
+
+      setCards((previousCards) => {
+        const remaining = previousCards.filter(
+          (card) => card.id !== rejectConfirmCard.id
+        );
+        if (remaining.length <= 2 && pagination.hasNextPage && !loadingMore) {
+          loadMoreInternships();
+        }
+        return remaining;
+      });
+
+      fetchMyActions();
+      setRejectConfirmCard(null);
+    } catch (error) {
+      showToast(error.message || "Unable to reject saved internship.");
+    } finally {
+      setIsRejectingSaved(false);
+    }
+  };
+
+  // Unsave an internship and update views
+  const handleUnsave = async (internshipId, roleTitle) => {
+    try {
+      await saveInternshipAction(internshipId, "unsaved");
+      showToast(`Removed "${roleTitle}" from saved`);
       await fetchMyActions();
-    };
+      await fetchInternships(filters, false);
+    } catch (error) {
+      showToast(error.message || "Unable to unsave internship.");
+    }
+  };
+
+  // Accept / express interest from saved view
+  const handleAcceptFromSaved = async (internshipId, roleTitle) => {
+    try {
+      await saveInternshipAction(internshipId, "accepted");
+      showToast(`Interested in "${roleTitle}"`);
+      await fetchMyActions();
+      await fetchInternships(filters, false);
+    } catch (error) {
+      showToast(error.message || "Unable to accept internship.");
+    }
+  };
 
     const handleSearchChange = (value) => {
       setSearchQuery(value);
@@ -598,80 +555,83 @@ const fetchMyActions = useCallback(async () => {
       }
     };
 
-    const actionsDisabled =
-      loading || Boolean(apiError) || filteredCards.length === 0;
-
-    const discoveryViewState = getDiscoveryViewState({
-      loading,
-      searchPending,
-      error: apiError,
-      hasCards: filteredCards.length > 0,
-      hasActiveFilters: Boolean(
-        searchQuery ||
-          appliedFilters.mode ||
-          appliedFilters.location ||
-          appliedFilters.skill ||
-          appliedFilters.verified
-      ),
-      loadingMore,
-      hasNextPage,
-    });
+    await fetchInternships(
+      {
+        ...filters,
+        search: searchQuery,
+      },
+      false
+    );
+  };
 
     return (
       <div className="h-screen bg-[#F7F9F9] flex overflow-hidden">
         <DashboardSidebar />
 
-        <div className="flex-1 md:ml-[220px] ml-0 flex flex-col h-screen overflow-hidden relative">
-          <DashboardHeader />
+    await fetchInternships({ ...EMPTY_FILTERS, search: "" }, false);
+  };
 
-          {/* Toast notifications */}
-          <AnimatePresence>
-            {toastMessage && (
-              <motion.div
-                initial={{ opacity: 0, y: -20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg flex items-center gap-2"
-              >
-                <CheckCircle className="w-3.5 h-3.5 text-[#4B9C93]" />
-                {toastMessage}
-              </motion.div>
-            )}
-          </AnimatePresence>
+  // Reload the discovery deck starting from page 1, shuffling available eligible internships.
+  const handleReloadDeck = async () => {
+    try {
+      setIsReloading(true);
+      await fetchInternships(filters, true);
+      await fetchMyActions();
+    } finally {
+      setIsReloading(false);
+    }
+  };
 
-          <main className="flex-1 flex flex-col items-center px-4 sm:px-6 py-3 sm:py-4 overflow-y-auto min-h-0">
-            {/* ──── Search Bar & Filter Button ──── */}
-            <div className="flex items-center gap-2.5 sm:gap-3 mb-4 sm:mb-5 w-full max-w-3xl mx-auto shrink-0 z-10">
-              {/* Search Input Container */}
-              <div className="flex-1 relative flex items-center bg-white border-2 border-[#E5E6E5] rounded-full h-11 sm:h-12 px-4 sm:px-5 shadow-xs focus-within:border-[#4B9C93] focus-within:ring-2 focus-within:ring-[#4B9C93]/15 transition-all">
-                <Search className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-[#292D32] shrink-0" strokeWidth={2} />
-                <input
-                  id="internship-search"
-                  type="text"
-                  placeholder="Search internships, roles, companies, skills..."
-                  value={searchQuery}
-                  onChange={(event) => handleSearchChange(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      handleApplyFilters();
-                    }
-                  }}
-                  className="w-full bg-transparent pl-2.5 sm:pl-3 pr-2 text-xs sm:text-sm font-medium text-[#101828] placeholder:text-[#67727A]/80 focus:outline-none"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => handleSearchChange("")}
-                    aria-label="Clear search"
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
+  const actionsDisabled =
+    loading ||
+    Boolean(apiError) ||
+    filteredCards.length === 0 ||
+    Boolean(rejectConfirmCard) ||
+    isRejectingSaved;
 
-              {/* Circular Filter Button */}
-              {activeTab === "Internships" && (
+  return (
+    <div className="h-screen bg-[#F7F9F9] flex overflow-hidden">
+      <DashboardSidebar />
+
+      <div className="flex-1 md:ml-[220px] ml-0 flex flex-col h-screen overflow-hidden relative">
+        <DashboardHeader />
+
+        {/* Toast notifications */}
+        <AnimatePresence>
+          {toastMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg flex items-center gap-2"
+            >
+              <CheckCircle className="w-3.5 h-3.5 text-[#4B9C93]" />
+              {toastMessage}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <main className="flex-1 flex flex-col items-center px-4 sm:px-6 py-0 overflow-y-auto min-h-0">
+          {/* ──── Search Bar & Filter Button (Sticky) ──── */}
+          <div className="sticky top-0 z-20 bg-[#F7F9F9] pt-3 sm:pt-4 pb-2 sm:pb-3 w-full max-w-3xl mx-auto shrink-0">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Search Input Container */}
+            <div className="flex-1 relative flex items-center bg-white border-2 border-[#E5E6E5] rounded-full h-11 sm:h-12 px-4 sm:px-5 shadow-xs focus-within:border-[#4B9C93] focus-within:ring-2 focus-within:ring-[#4B9C93]/15 transition-all">
+              <Search className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-[#292D32] shrink-0" strokeWidth={2} />
+              <input
+                id="internship-search"
+                type="text"
+                placeholder="Search internships, roles, companies, skills..."
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    handleApplyFilters();
+                  }
+                }}
+                className="w-full bg-transparent pl-2.5 sm:pl-3 pr-2 text-xs sm:text-sm font-medium text-[#101828] placeholder:text-[#67727A]/80 focus:outline-none"
+              />
+              {searchQuery && (
                 <button
                   id="filter-btn"
                   type="button"
@@ -687,58 +647,47 @@ const fetchMyActions = useCallback(async () => {
               )}
             </div>
 
-            {/* Filter panel (Discovery Feed only) */}
-            <AnimatePresence>
-              {activeTab === "Internships" && showFilters && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0, y: -8 }}
-                  animate={{ opacity: 1, height: "auto", y: 0 }}
-                  exit={{ opacity: 0, height: 0, y: -8 }}
-                  className="w-full max-w-[600px] overflow-hidden mb-6"
-                >
-                  <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-bold text-gray-900">
-                        Filter Internships
-                      </h3>
+            {/* Circular Filter Button */}
+            {activeTab === "Internships" && (
+              <button
+                id="filter-btn"
+                type="button"
+                aria-label="Toggle filters"
+                aria-expanded={showFilters}
+                onClick={() => setShowFilters((previous) => !previous)}
+                className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border-2 border-[#E5E6E5] bg-white flex items-center justify-center shrink-0 cursor-pointer shadow-xs hover:border-[#4B9C93] hover:bg-[#F8FAFC] transition-all ${
+                  showFilters ? "border-[#4B9C93] ring-2 ring-[#4B9C93]/20" : ""
+                }`}
+              >
+                <SlidersHorizontal className="w-4 h-4 sm:w-5 sm:h-5 text-[#292D32]" strokeWidth={2} />
+              </button>
+            )}
+            </div>
+          </div>
 
-                      <button
-                        type="button"
-                        onClick={() => setShowFilters(false)}
-                        aria-label="Close filters"
-                        className="text-gray-400 hover:text-gray-700"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Work mode */}
-                      <div>
-                        <label
-                          htmlFor="filter-mode"
-                          className="block text-xs font-semibold text-gray-600 mb-2"
-                        >
-                          Work Mode
-                        </label>
-
-                        <select
-                          id="filter-mode"
-                          value={filters.mode}
-                          onChange={(event) =>
-                            setFilters((previous) => ({
-                              ...previous,
-                              mode: event.target.value,
-                            }))
-                          }
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 bg-white focus:outline-none focus:border-[#4B9C93]"
-                        >
-                          <option value="">All modes</option>
-                          <option value="remote">Remote</option>
-                          <option value="hybrid">Hybrid</option>
-                          <option value="onsite">On-site</option>
-                        </select>
-                      </div>
+          {/* Filter panel (Discovery Feed only) — mobile = fixed modal, desktop = inline */}
+          {activeTab === "Internships" && showFilters && (
+            <>
+              {/* Mobile backdrop */}
+              <div
+                className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 sm:hidden"
+                onClick={() => setShowFilters(false)}
+              />
+            </>
+          )}
+          <AnimatePresence>
+            {activeTab === "Internships" && showFilters && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, y: -8 }}
+                animate={{ opacity: 1, height: "auto", y: 0 }}
+                exit={{ opacity: 0, height: 0, y: -8 }}
+                className="fixed sm:relative inset-x-4 top-24 sm:inset-x-auto sm:top-auto w-auto sm:w-full sm:max-w-[600px] overflow-hidden sm:mb-6 z-50 sm:z-auto"
+              >
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-gray-900">
+                      Filter Internships
+                    </h3>
 
                       {/* Location */}
                       <div>
@@ -971,43 +920,89 @@ const fetchMyActions = useCallback(async () => {
                       Skip
                     </span>
                   </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+
+          {/* ──────────────── TAB CONTENT ──────────────── */}
+          {activeTab === "Internships" ? (
+            <div className="w-full flex flex-col items-center justify-start sm:justify-center my-auto py-2 shrink-0 min-h-0">
+              {/* Internship Swipe Deck */}
+              <div className="relative w-full max-w-[360px] sm:max-w-[400px] md:max-w-[430px] lg:max-w-[450px] h-[410px] sm:h-[420px] md:h-[440px] max-h-[calc(100vh-230px)] mb-3 sm:mb-5 flex items-center justify-center shrink-0">
+                {loading || loadingMore ? (
+                  <div className="flex flex-col items-center gap-3 text-sm text-gray-500">
+                    <div className="w-8 h-8 border-4 border-[#4B9C93]/20 border-t-[#4B9C93] rounded-full animate-spin" />
+                    {isReloading ? "Reloading internships..." : loadingMore ? "Loading more internships..." : "Loading internships..."}
+                  </div>
+                ) : apiError ? (
+                  <div className="w-full h-full bg-white rounded-2xl p-6 text-center shadow-lg flex flex-col items-center justify-center">
+                    <p className="text-sm text-red-600 mb-4">{apiError}</p>
 
                   {/* Save */}
                   <div className="flex flex-col items-center gap-1">
                     <button
                       id="action-save"
                       type="button"
-                      onClick={() => triggerButtonSwipe("save")}
-                      disabled={actionsDisabled}
-                      aria-label="Save internship"
-                      className={`w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-white border-2 border-gray-300 flex items-center justify-center text-gray-400 shadow-md shadow-gray-100/50 transition-all duration-200 ${
-                        actionsDisabled
-                          ? "opacity-40 cursor-not-allowed"
-                          : "hover:bg-gray-50 hover:border-gray-400 hover:text-gray-600 hover:scale-110 active:scale-95 cursor-pointer"
-                      }`}
+                      onClick={() => handleReloadDeck()}
+                      className="px-5 py-2 rounded-full bg-[#4B9C93] text-white text-xs sm:text-sm font-semibold hover:bg-[#3d867e] flex items-center gap-2 cursor-pointer"
                     >
-                      <Bookmark className="w-5 h-5 sm:w-5.5 sm:h-5.5" strokeWidth={2} />
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Try Again
                     </button>
                     <span className="text-[11px] sm:text-xs text-gray-500 font-medium">
                       Save
                     </span>
                   </div>
+                ) : filteredCards.length > 0 ? (
+                  <AnimatePresence>
+                    {filteredCards.slice(0, 3).map((internship, index) => (
+                      <InternshipCard
+                        key={internship.id}
+                        internship={internship}
+                        isTopCard={index === 0}
+                        indexOffset={index}
+                        onSwipe={handleCardSwipe}
+                        swipeDirection={
+                          index === 0 ? buttonSwipeDirection : null
+                        }
+                      />
+                    ))}
+                  </AnimatePresence>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="w-full h-full aspect-square bg-white rounded-2xl p-6 sm:p-7 border border-gray-100 shadow-xl shadow-black/5 flex flex-col items-center justify-center text-center"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-[#E6F7F3] border border-[#4B9C93]/20 flex items-center justify-center text-[#4B9C93] mb-3">
+                      <CheckCircle className="w-6 h-6" />
+                    </div>
+
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+                      {emptyDeckReason === "no_filter_matches" || searchQuery
+                        ? "No matches found"
+                        : "All caught up! 🎉"}
+                    </h3>
+
+                    <p className="text-xs sm:text-sm text-gray-500 max-w-[320px] mb-4 leading-relaxed">
+                      {emptyDeckReason === "no_filter_matches" || searchQuery
+                        ? "No internships match your current search or filters. Try adjusting your filters or reload to check for opportunities."
+                        : "No more new internships in the discovery deck. You can reload the list to review the opportunities again."}
+                    </p>
 
                   {/* Accept */}
                   <div className="flex flex-col items-center gap-1">
                     <button
                       id="action-accept"
                       type="button"
-                      onClick={() => triggerButtonSwipe("right")}
-                      disabled={actionsDisabled}
-                      aria-label="Accept internship"
-                      className={`w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-white border-2 border-[#4B9C93] flex items-center justify-center text-[#4B9C93] shadow-md shadow-[#4B9C93]/10 transition-all duration-200 ${
-                        actionsDisabled
-                          ? "opacity-40 cursor-not-allowed"
-                          : "hover:bg-[#E6F7F3] hover:scale-110 active:scale-95 cursor-pointer"
-                      }`}
+                      onClick={handleReloadDeck}
+                      disabled={loading || isReloading}
+                      className="px-5 py-2 rounded-full bg-[#4B9C93] text-white text-xs sm:text-sm font-semibold hover:bg-[#3d867e] active:scale-95 shadow-md shadow-[#4B9C93]/25 transition-all duration-200 flex items-center gap-2 cursor-pointer disabled:opacity-50"
                     >
-                      <Check className="w-5 h-5 sm:w-5.5 sm:h-5.5" strokeWidth={2.5} />
+                      <RotateCcw className={`w-3.5 h-3.5 ${isReloading ? "animate-spin" : ""}`} />
+                      {isReloading ? "Reloading..." : "Reload Internships"}
                     </button>
                     <span className="text-[11px] sm:text-xs text-gray-500 font-medium">
                       Accept
@@ -1344,35 +1339,92 @@ const fetchMyActions = useCallback(async () => {
                   </div>
                 )}
               </div>
-            ) : (
-              /* ──────────────── JOBS / COMPANIES PLACEHOLDER ──────────────── */
-              <div className="w-full max-w-[600px] bg-white rounded-2xl p-10 border border-gray-200 shadow-sm text-center flex flex-col items-center mb-8">
-                <div className="w-14 h-14 rounded-full bg-[#E6F7F3] flex items-center justify-center text-[#4B9C93] mb-4">
-                  {activeTab === "Jobs" ? (
-                    <Briefcase className="w-7 h-7" />
-                  ) : (
-                    <Building2 className="w-7 h-7" />
-                  )}
+              <h3 className="text-lg font-bold text-gray-900 mb-1">
+                {activeTab === "Jobs"
+                  ? "Jobs Feed Coming Soon"
+                  : "Company Directory Coming Soon"}
+              </h3>
+              <p className="text-sm text-gray-500 max-w-[320px] mb-5">
+                We are currently focusing on internship discovery. Check back soon for full-time {activeTab.toLowerCase()}.
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveTab("Internships")}
+                className="px-6 py-2.5 rounded-full bg-[#4B9C93] text-white text-sm font-semibold hover:bg-[#3d867e] transition-all"
+              >
+                Back to Discovery Deck
+              </button>
+            </div>
+          )}
+        </main>
+
+        {/* Confirmation dialog for rejecting a saved internship */}
+        <AnimatePresence>
+          {rejectConfirmCard && (
+            <div
+              id="reject-saved-dialog-backdrop"
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
+              onClick={(e) => {
+                if (e.target === e.currentTarget && !isRejectingSaved) {
+                  handleKeepSaved();
+                }
+              }}
+            >
+              <motion.div
+                id="reject-saved-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="reject-saved-title"
+                aria-describedby="reject-saved-message"
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 flex flex-col gap-4"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
+                    <Bookmark className="w-5 h-5 fill-amber-500 text-amber-500" />
+                  </div>
+                  <div>
+                    <h3
+                      id="reject-saved-title"
+                      className="font-bold text-gray-900 text-base"
+                    >
+                      Remove from Saved?
+                    </h3>
+                    <p
+                      id="reject-saved-message"
+                      className="text-xs sm:text-sm text-gray-600 mt-1 leading-relaxed"
+                    >
+                      This internship is saved. Rejecting it will remove it from Saved. Continue?
+                    </p>
+                  </div>
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-1">
-                  {activeTab === "Jobs"
-                    ? "Jobs Feed Coming Soon"
-                    : "Company Directory Coming Soon"}
-                </h3>
-                <p className="text-sm text-gray-500 max-w-[320px] mb-5">
-                  We are currently focusing on internship discovery. Check back soon for full-time {activeTab.toLowerCase()}.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("Internships")}
-                  className="px-6 py-2.5 rounded-full bg-[#4B9C93] text-white text-sm font-semibold hover:bg-[#3d867e] transition-all"
-                >
-                  Back to Discovery Deck
-                </button>
-              </div>
-            )}
-          </main>
-        </div>
+
+                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                  <button
+                    id="keep-saved-btn"
+                    type="button"
+                    disabled={isRejectingSaved}
+                    onClick={handleKeepSaved}
+                    className="px-4 py-2 text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors cursor-pointer disabled:opacity-50 text-center"
+                  >
+                    Keep Saved
+                  </button>
+                  <button
+                    id="confirm-remove-saved-reject-btn"
+                    type="button"
+                    disabled={isRejectingSaved}
+                    onClick={handleConfirmRemoveFromSavedAndReject}
+                    className="px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-full transition-colors shadow-sm shadow-red-200 cursor-pointer disabled:opacity-50 text-center"
+                  >
+                    {isRejectingSaved ? "Removing & Rejecting..." : "Remove from Saved & Reject"}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }

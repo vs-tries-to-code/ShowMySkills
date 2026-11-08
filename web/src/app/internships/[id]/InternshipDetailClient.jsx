@@ -27,18 +27,27 @@ import CompanyLogo from "@/components/CompanyLogo";
 import { internshipService, applicationService } from "@/services/apiClient";
 
 function formatStipend(item) {
-  if (!item) return "Competitive";
-  if (item.stipendText) return item.stipendText;
+  if (!item) return "Unpaid";
+  if (
+    item.compensationType === "unpaid" ||
+    item.stipend === "Unpaid" ||
+    item.stipendText === "Unpaid"
+  ) {
+    return "Unpaid";
+  }
   const min = item.stipendMin;
   const max = item.stipendMax;
-  if (min != null && max != null && min > 0 && max > 0) {
+  if (min != null && max != null && (min > 0 || max > 0)) {
     return `₹${Number(min).toLocaleString("en-IN")} - ₹${Number(max).toLocaleString("en-IN")}/mo`;
   } else if (min != null && min > 0) {
     return `₹${Number(min).toLocaleString("en-IN")}/mo`;
   } else if (max != null && max > 0) {
     return `₹${Number(max).toLocaleString("en-IN")}/mo`;
   }
-  return "Competitive";
+  if (item.stipendText) return item.stipendText;
+  if (item.stipend) return item.stipend;
+  if (item.compensationType === "flexible") return "Flexible";
+  return "Unpaid";
 }
 
 export default function InternshipDetailClient({ id: propId }) {
@@ -250,7 +259,17 @@ export default function InternshipDetailClient({ id: propId }) {
           {!loading && internship && (
             <>
               {/* Header Card */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-8 space-y-6">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                {internship.posterImage && (
+                  <div className="w-full h-48 sm:h-64 bg-slate-100 overflow-hidden border-b border-slate-200 relative">
+                    <img
+                      src={internship.posterImage}
+                      alt={internship.role || "Internship Poster"}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="p-6 sm:p-8 space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
                   <div className="flex items-start gap-5">
                     <CompanyLogo
@@ -374,6 +393,7 @@ export default function InternshipDetailClient({ id: propId }) {
                   </div>
                 </div>
               </div>
+            </div>
 
               {/* Main Information Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

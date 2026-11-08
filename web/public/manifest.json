@@ -1,0 +1,24 @@
+{
+  "name": "ShowMySkills",
+  "short_name": "ShowMySkills",
+  "description": "Showcase your skills, discover verified internships, and connect with emerging talent.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F9F9",
+  "theme_color": "#4B9C93",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

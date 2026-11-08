@@ -10,6 +10,7 @@ import {
   CheckCircle,
   XCircle,
   Monitor,
+  Bookmark,
 } from "lucide-react";
 import { getSwipeDirection } from "@/features/internships/feedUtils.mjs";
 
@@ -41,6 +42,7 @@ export default function InternshipCard({
     duration,
     skills = [],
     isVerified,
+    isSaved,
     jobType,
     postedTime,
     description,
@@ -191,10 +193,16 @@ export default function InternshipCard({
         </motion.div>
       )}
 
-      {/* Company logo / image area (fills remaining balance space) */}
+      {/* Company logo / poster image area (fills remaining balance space) */}
       <div className="relative px-5 sm:px-6 pt-3.5 pb-2 flex-1 min-h-[80px] flex flex-col">
-        <div className="w-full h-full rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 flex flex-col items-center justify-center gap-1 overflow-hidden">
-          {internship.companyLogo ? (
+        <div className="w-full h-full rounded-xl border border-gray-100 bg-gray-50/50 flex flex-col items-center justify-center gap-1 overflow-hidden">
+          {internship.posterImage ? (
+            <img
+              src={internship.posterImage}
+              alt={roleTitle || companyName}
+              className="w-full h-full object-cover"
+            />
+          ) : internship.companyLogo ? (
             <img
               src={internship.companyLogo}
               alt={companyName}
@@ -215,9 +223,23 @@ export default function InternshipCard({
           )}
         </div>
 
-        {/* Verified badge */}
+        {/* Saved badge */}
+        {isSaved && (
+          <span
+            id={`saved-badge-${internship.id}`}
+            className="absolute top-6 left-7 sm:left-8 inline-flex items-center gap-1 text-[11px] font-semibold text-[#4B9C93] bg-[#E6F7F3] border border-[#4B9C93]/30 rounded-full px-2.5 py-0.5 shadow-2xs z-30"
+          >
+            <Bookmark className="w-3 h-3 fill-[#4B9C93] text-[#4B9C93]" />
+            Saved
+          </span>
+        )}
+
+        {/* Verified badge — genuine company verification badge only */}
         {isVerified && (
-          <span className="absolute top-6 right-7 sm:right-8 inline-flex items-center gap-1 text-[11px] font-semibold text-[#4B9C93] bg-[#E6F7F3] border border-[#4B9C93]/20 rounded-full px-2.5 py-0.5 shadow-2xs">
+          <span
+            id={`verified-badge-${internship.id}`}
+            className="absolute top-6 right-7 sm:right-8 inline-flex items-center gap-1 text-[11px] font-semibold text-[#4B9C93] bg-[#E6F7F3] border border-[#4B9C93]/20 rounded-full px-2.5 py-0.5 shadow-2xs"
+          >
             <BadgeCheck className="w-3.5 h-3.5" />
             Verified
           </span>

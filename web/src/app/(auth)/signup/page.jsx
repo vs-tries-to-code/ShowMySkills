@@ -56,6 +56,26 @@ const signupRoleConfigs = {
   },
 };
 
+const COUNTRY_CODES = [
+  { code: "+91", label: "+91 (India)" },
+  { code: "+1", label: "+1 (US/Canada)" },
+  { code: "+44", label: "+44 (UK)" },
+  { code: "+61", label: "+61 (Australia)" },
+  { code: "+65", label: "+65 (Singapore)" },
+  { code: "+971", label: "+971 (UAE)" },
+  { code: "+49", label: "+49 (Germany)" },
+  { code: "+33", label: "+33 (France)" },
+  { code: "+81", label: "+81 (Japan)" },
+  { code: "+86", label: "+86 (China)" },
+  { code: "+966", label: "+966 (Saudi Arabia)" },
+  { code: "+60", label: "+60 (Malaysia)" },
+  { code: "+62", label: "+62 (Indonesia)" },
+  { code: "+92", label: "+92 (Pakistan)" },
+  { code: "+880", label: "+880 (Bangladesh)" },
+  { code: "+977", label: "+977 (Nepal)" },
+  { code: "+94", label: "+94 (Sri Lanka)" },
+];
+
 const getApiBaseUrl = () => {
   const url =
     process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
@@ -428,6 +448,29 @@ function SignupFormContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Student Specific Form State
+  const [studentCollege, setStudentCollege] = useState("");
+  const [studentGraduationYear, setStudentGraduationYear] = useState("");
+  const [studentCollegeId, setStudentCollegeId] = useState("");
+  const [studentCollegeIdFile, setStudentCollegeIdFile] = useState(null);
+  const [studentCollegeIdPreview, setStudentCollegeIdPreview] = useState(null);
+  const [studentFileError, setStudentFileError] = useState("");
+  const [studentCountryCode, setStudentCountryCode] = useState("+91");
+  const [studentPhone, setStudentPhone] = useState("");
+
+  // Student Email Verification State
+  const [studentOtp, setStudentOtp] = useState("");
+  const [studentOtpSent, setStudentOtpSent] = useState(false);
+  const [studentOtpSending, setStudentOtpSending] = useState(false);
+  const [studentOtpCountdown, setStudentOtpCountdown] = useState(0);
+  const [studentOtpVerifying, setStudentOtpVerifying] = useState(false);
+  const [studentEmailVerified, setStudentEmailVerified] = useState(false);
+  const [studentVerificationToken, setStudentVerificationToken] = useState("");
+  const [studentOtpMsg, setStudentOtpMsg] = useState("");
+  const [studentOtpError, setStudentOtpError] = useState("");
+
+  const studentFileInputRef = useRef(null);
+
   // Admin Flow State
   const [adminStep, setAdminStep] = useState(1);
   const [adminName, setAdminName] = useState("");
@@ -501,6 +544,14 @@ function SignupFormContent() {
 
   // Cooldown timers
   useEffect(() => {
+    if (studentOtpCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setStudentOtpCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [studentOtpCountdown]);
+
+  useEffect(() => {
     if (applicantOtpCountdown <= 0) return;
     const timer = setInterval(() => {
       setApplicantOtpCountdown((prev) => (prev > 0 ? prev - 1 : 0));
@@ -518,6 +569,110 @@ function SignupFormContent() {
 
   const config = signupRoleConfigs[activeRole];
 
+  // Student Flow Handlers
+  const handleStudentEmailChange = (val) => {
+    setEmail(val);
+    if (studentEmailVerified || studentOtpSent) {
+      setStudentEmailVerified(false);
+      setStudentOtpSent(false);
+      setStudentVerificationToken("");
+      setStudentOtpMsg("");
+      setStudentOtpError("");
+      setStudentOtp("");
+    }
+  };
+
+  const handleSendStudentOtp = async () => {
+    setStudentOtpError("");
+    setStudentOtpMsg("");
+
+    const emailTrimmed = email.trim();
+    if (!emailTrimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      setStudentOtpError("Please enter a valid email address first.");
+      return;
+    }
+
+    setStudentOtpSending(true);
+    try {
+      const res = await authService.sendSignupOtp(emailTrimmed.toLowerCase());
+      setStudentOtpSent(true);
+      setStudentOtpCountdown(60);
+      setStudentOtpMsg(res?.message || "Verification code sent to your email.");
+    } catch (err) {
+      setStudentOtpError(
+        err.message || "Failed to send verification code. Please try again."
+      );
+    } finally {
+      setStudentOtpSending(false);
+    }
+  };
+
+  const handleVerifyStudentOtp = async () => {
+    setStudentOtpError("");
+    setStudentOtpMsg("");
+
+    const cleanOtp = studentOtp.trim();
+    if (!cleanOtp || cleanOtp.length !== 6) {
+      setStudentOtpError("Please enter the 6-digit verification code.");
+      return;
+    }
+
+    setStudentOtpVerifying(true);
+    try {
+      const res = await authService.verifySignupOtp(
+        email.trim().toLowerCase(),
+        cleanOtp
+      );
+      setStudentEmailVerified(true);
+      setStudentVerificationToken(res.verificationToken || "verified");
+      setStudentOtpMsg("Email verified successfully!");
+    } catch (err) {
+      setStudentOtpError(
+        err.message || "Invalid or expired verification code."
+      );
+    } finally {
+      setStudentOtpVerifying(false);
+    }
+  };
+
+  const handleStudentCollegeIdSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/png", "application/pdf"];
+    if (!allowedTypes.includes(file.type)) {
+      setStudentFileError("Only JPG, PNG, and PDF files are allowed.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setStudentFileError("File size must be less than 5MB.");
+      return;
+    }
+
+    setStudentFileError("");
+    setStudentCollegeIdFile(file);
+
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        setStudentCollegeIdPreview(uploadEvent.target.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setStudentCollegeIdPreview(null);
+    }
+  };
+
+  const handleRemoveStudentCollegeId = () => {
+    setStudentCollegeIdFile(null);
+    setStudentCollegeIdPreview(null);
+    setStudentFileError("");
+    if (studentFileInputRef.current) {
+      studentFileInputRef.current.value = "";
+    }
+  };
+
   // Standard Student / Company Signup Handler
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -525,6 +680,78 @@ function SignupFormContent() {
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return;
+    }
+
+    if (activeRole === "student") {
+      if (!studentEmailVerified) {
+        setError("Please verify your email address before creating your account.");
+        return;
+      }
+
+      if (!studentCollege.trim()) {
+        setError("College or University name is required");
+        return;
+      }
+
+      if (!studentGraduationYear) {
+        setError("Graduation year is required");
+        return;
+      }
+
+      if (!studentCollegeId.trim()) {
+        setError("College ID / Roll Number is required");
+        return;
+      }
+
+      const cleanPhone = studentPhone.trim().replace(/^0+/, "");
+      if (!cleanPhone) {
+        setError("Phone number is required");
+        return;
+      }
+
+      const formattedPhone = `${studentCountryCode}${cleanPhone}`;
+
+      setLoading(true);
+      try {
+        const formData = new FormData();
+        formData.append("name", fullName.trim());
+        formData.append("email", email.trim().toLowerCase());
+        formData.append("phone", formattedPhone);
+        formData.append("password", password);
+        formData.append("role", "student");
+        formData.append("college", studentCollege.trim());
+        formData.append("graduationYear", String(studentGraduationYear));
+        formData.append("collegeId", studentCollegeId.trim());
+        if (studentVerificationToken) {
+          formData.append("verificationToken", studentVerificationToken);
+        }
+        if (studentCollegeIdFile) {
+          formData.append("collegeIdFile", studentCollegeIdFile);
+        }
+
+        const res = await authService.register(formData);
+        const token = res?.data?.accessToken || res?.data?.token || res?.token;
+        if (token) {
+          localStorage.setItem("showmyskills_token", token);
+          localStorage.setItem(
+            "showmyskills_user",
+            JSON.stringify(res.data?.user || res.data || res.user || { name: fullName, email, role: "student" })
+          );
+        }
+        setTimeout(() => {
+          setLoading(false);
+          router.push(config.dashboardRoute);
+        }, 400);
+      } catch (err) {
+        setLoading(false);
+        setError(err.message || "Failed to create account. Please try again.");
+      }
       return;
     }
 
@@ -1383,95 +1610,443 @@ function SignupFormContent() {
 
             {/* Form Inputs Grid */}
             <form onSubmit={handleSignup} className="space-y-3.5">
-              {/* Field 1: Name */}
-              <div className="space-y-1">
-                <label className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
-                  {config.nameLabel}
-                </label>
-                <div className="flex items-center h-[42px] px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all">
-                  <svg
-                    className="w-4 h-4 text-[#4A5565] shrink-0 opacity-80"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M12.6672 14V12.6667C12.6672 11.9594 12.3862 11.2811 11.886 10.781C11.3859 10.281 10.7075 10 10.0002 10H5.99974C5.29241 10 4.61406 10.281 4.1139 10.781C3.61375 11.2811 3.33276 11.9594 3.33276 12.6667V14M10.6669 4.66667C10.6669 6.13943 9.47289 7.33333 7.99996 7.33333C6.52704 7.33333 5.33299 6.13943 5.33299 4.66667C5.33299 3.19391 6.52704 2 7.99996 2C9.47289 2 10.6669 3.19391 10.6669 4.66667Z"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <input
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder={config.namePlaceholder}
-                    className="w-full bg-transparent pl-2.5 text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none"
-                  />
-                </div>
-              </div>
+              {activeRole === "student" ? (
+                <>
+                  {/* Student Field 1: Name */}
+                  <div className="space-y-1">
+                    <label htmlFor="student-name-input" className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
+                      Full Name *
+                    </label>
+                    <div className="flex items-center h-[42px] px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all">
+                      <svg
+                        className="w-4 h-4 text-[#4A5565] shrink-0 opacity-80"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M12.6672 14V12.6667C12.6672 11.9594 12.3862 11.2811 11.886 10.781C11.3859 10.281 10.7075 10 10.0002 10H5.99974C5.29241 10 4.61406 10.281 4.1139 10.781C3.61375 11.2811 3.33276 11.9594 3.33276 12.6667V14M10.6669 4.66667C10.6669 6.13943 9.47289 7.33333 7.99996 7.33333C6.52704 7.33333 5.33299 6.13943 5.33299 4.66667C5.33299 3.19391 6.52704 2 7.99996 2C9.47289 2 10.6669 3.19391 10.6669 4.66667Z"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <input
+                        type="text"
+                        required
+                        id="student-name-input"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        placeholder="e.g. Tara Joshi"
+                        className="w-full bg-transparent pl-2.5 text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none"
+                      />
+                    </div>
+                  </div>
 
-              {/* Field 2: Email */}
-              <div className="space-y-1">
-                <label className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
-                  {config.emailLabel}
-                </label>
-                <div className="flex items-center h-[42px] px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all">
-                  <svg
-                    className="w-4 h-4 text-[#4A5565] shrink-0 opacity-80"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M14.6672 4.66704L8.67268 8.48465C8.46926 8.60278 8.23821 8.66501 8.00296 8.66501C7.76772 8.66501 7.53666 8.60278 7.33324 8.48465L1.33276 4.66704M14.6672 4.66704V4.00044C14.6672 3.26413 14.0702 2.66724 13.3337 2.66724H2.6662C1.92977 2.66724 1.33276 3.26413 1.33276 4.00044V4.66704M14.6672 4.66704V11.9996C14.6672 12.7359 14.0702 13.3328 13.3337 13.3328H2.6662C1.92977 13.3328 1.33276 12.7359 1.33276 11.9996V4.66704"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={config.emailPlaceholder}
-                    className="w-full bg-transparent pl-2.5 text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none"
-                  />
-                </div>
-              </div>
+                  {/* Student Field 2: Email & Send OTP */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="student-email-input" className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
+                        Email Address *
+                      </label>
+                      {studentEmailVerified && (
+                        <span id="student-email-verified-badge" className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                          ✓ Email Verified
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center h-[42px] px-2.5 sm:px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all gap-2">
+                      <svg
+                        className="w-4 h-4 text-[#4A5565] shrink-0 opacity-80"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14.6672 4.66704L8.67268 8.48465C8.46926 8.60278 8.23821 8.66501 8.00296 8.66501C7.76772 8.66501 7.53666 8.60278 7.33324 8.48465L1.33276 4.66704M14.6672 4.66704V4.00044C14.6672 3.26413 14.0702 2.66724 13.3337 2.66724H2.6662C1.92977 2.66724 1.33276 3.26413 1.33276 4.00044V4.66704M14.6672 4.66704V11.9996C14.6672 12.7359 14.0702 13.3328 13.3337 13.3328H2.6662C1.92977 13.3328 1.33276 12.7359 1.33276 11.9996V4.66704"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <input
+                        type="email"
+                        required
+                        id="student-email-input"
+                        value={email}
+                        onChange={(e) => handleStudentEmailChange(e.target.value)}
+                        placeholder="you@university.edu"
+                        className="flex-1 bg-transparent text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none min-w-0"
+                      />
+                      {!studentEmailVerified && (
+                        <button
+                          type="button"
+                          onClick={handleSendStudentOtp}
+                          disabled={studentOtpSending || studentOtpCountdown > 0 || !email.trim()}
+                          id="student-send-otp-btn"
+                          className="h-[30px] px-2.5 sm:px-3 rounded-md bg-[#009689] hover:bg-[#007e73] active:scale-[0.98] text-white text-[11px] sm:text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0 transition-all"
+                        >
+                          {studentOtpSending
+                            ? "Sending..."
+                            : studentOtpCountdown > 0
+                            ? `Resend (${studentOtpCountdown}s)`
+                            : studentOtpSent
+                            ? "Resend OTP"
+                            : "Send OTP"}
+                        </button>
+                      )}
+                    </div>
+                    {studentOtpMsg && (
+                      <p className="text-[11px] sm:text-xs text-emerald-600 font-medium">
+                        {studentOtpMsg}
+                      </p>
+                    )}
+                    {studentOtpError && (
+                      <p className="text-[11px] sm:text-xs text-red-500 font-medium">
+                        {studentOtpError}
+                      </p>
+                    )}
+                  </div>
 
-              {/* Field 3: Phone Number */}
-              <div className="space-y-1">
-                <label className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
-                  Phone Number
-                </label>
-                <div className="flex items-center h-[42px] px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all">
-                  <svg
-                    className="w-4 h-4 text-[#4A5565] shrink-0 opacity-80"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M9.2214 11.0458C9.35909 11.109 9.51422 11.1235 9.66122 11.0867C9.80823 11.05 9.93834 10.9643 10.0301 10.8438L10.2668 10.5337C10.391 10.3681 10.5521 10.2337 10.7372 10.1411C10.9224 10.0486 11.1266 10.0004 11.3336 10.0004H13.3337C13.6874 10.0004 14.0265 10.1409 14.2766 10.3909C14.5267 10.641 14.6672 10.9802 14.6672 11.3338V13.334C14.6672 13.6876 14.5267 14.0268 14.2766 14.2769C14.0265 14.5269 13.6874 14.6674 13.3337 14.6674C10.1509 14.6674 7.09838 13.403 4.84776 11.1524C2.59715 8.90179 1.33276 5.8493 1.33276 2.66645C1.33276 2.3128 1.47325 1.97363 1.72332 1.72356C1.97339 1.47349 2.31255 1.33301 2.6662 1.33301H4.66636C5.02001 1.33301 5.35918 1.47349 5.60925 1.72356C5.85932 1.97363 5.9998 2.3128 5.9998 2.66645V4.66661C5.9998 4.87362 5.95161 5.07779 5.85903 5.26294C5.76645 5.4481 5.63204 5.60915 5.46643 5.73336L5.1544 5.96738C5.032 6.06084 4.94573 6.19379 4.91024 6.34364C4.87476 6.4935 4.89224 6.65102 4.95972 6.78944C5.87091 8.64017 7.36953 10.1369 9.2214 11.0458Z"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
+                  {/* Student OTP Verification Input Box */}
+                  {studentOtpSent && !studentEmailVerified && (
+                    <div className="bg-[#F4F9F8] border border-[#CDE5E1] p-3 rounded-xl space-y-2 transition-all">
+                      <div className="flex items-center justify-between">
+                        <label htmlFor="student-otp-input" className="block text-xs font-semibold text-[#1F2937]">
+                          Enter 6-Digit Verification Code *
+                        </label>
+                        <span className="text-[11px] text-[#4A5565]">
+                          OTP valid for 10m
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          maxLength={6}
+                          pattern="[0-9]*"
+                          inputMode="numeric"
+                          value={studentOtp}
+                          onChange={(e) =>
+                            setStudentOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                          }
+                          placeholder="••••••"
+                          id="student-otp-input"
+                          className="h-[40px] px-3 rounded-lg border border-[#DADADA] bg-white text-center font-mono font-bold text-base tracking-widest text-[#1F2937] focus:outline-none focus:border-[#4B9C93] flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleVerifyStudentOtp}
+                          disabled={studentOtpVerifying || studentOtp.trim().length !== 6}
+                          id="student-verify-otp-btn"
+                          className="h-[40px] px-4 rounded-lg bg-[#009689] hover:bg-[#007e73] active:scale-[0.98] text-white font-bold text-xs shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0 transition-all"
+                        >
+                          {studentOtpVerifying ? "Verifying..." : "Verify Code"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Student Field 3: Phone Number with Country Code */}
+                  <div className="space-y-1">
+                    <label htmlFor="student-phone-input" className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
+                      Phone Number *
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {/* Visually separate Country Code Selector */}
+                      <div className="w-[110px] sm:w-[130px] h-[42px] px-2 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all flex items-center shrink-0">
+                        <select
+                          id="student-country-code"
+                          aria-label="Country Code"
+                          value={studentCountryCode}
+                          onChange={(e) => setStudentCountryCode(e.target.value)}
+                          className="w-full bg-transparent text-xs sm:text-sm font-semibold text-[#1F2937] focus:outline-none cursor-pointer"
+                        >
+                          {COUNTRY_CODES.map((item) => (
+                            <option key={item.code} value={item.code}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Phone Input */}
+                      <div className="flex-1 flex items-center h-[42px] px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all min-w-0">
+                        <svg
+                          className="w-4 h-4 text-[#4A5565] shrink-0 opacity-80"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M9.2214 11.0458C9.35909 11.109 9.51422 11.1235 9.66122 11.0867C9.80823 11.05 9.93834 10.9643 10.0301 10.8438L10.2668 10.5337C10.391 10.3681 10.5521 10.2337 10.7372 10.1411C10.9224 10.0486 11.1266 10.0004 11.3336 10.0004H13.3337C13.6874 10.0004 14.0265 10.1409 14.2766 10.3909C14.5267 10.641 14.6672 10.9802 14.6672 11.3338V13.334C14.6672 13.6876 14.5267 14.0268 14.2766 14.2769C14.0265 14.5269 13.6874 14.6674 13.3337 14.6674C10.1509 14.6674 7.09838 13.403 4.84776 11.1524C2.59715 8.90179 1.33276 5.8493 1.33276 2.66645C1.33276 2.3128 1.47325 1.97363 1.72332 1.72356C1.97339 1.47349 2.31255 1.33301 2.6662 1.33301H4.66636C5.02001 1.33301 5.35918 1.47349 5.60925 1.72356C5.85932 1.97363 5.9998 2.3128 5.9998 2.66645V4.66661C5.9998 4.87362 5.95161 5.07779 5.85903 5.26294C5.76645 5.4481 5.63204 5.60915 5.46643 5.73336L5.1544 5.96738C5.032 6.06084 4.94573 6.19379 4.91024 6.34364C4.87476 6.4935 4.89224 6.65102 4.95972 6.78944C5.87091 8.64017 7.36953 10.1369 9.2214 11.0458Z"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <input
+                          type="tel"
+                          required
+                          id="student-phone-input"
+                          value={studentPhone}
+                          onChange={(e) => setStudentPhone(e.target.value)}
+                          placeholder="98765 43210"
+                          className="w-full bg-transparent pl-2 text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Student Field 4 & 5: College & Graduation Year (2-column grid) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label htmlFor="student-college-input" className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
+                        College / University *
+                      </label>
+                      <div className="flex items-center h-[42px] px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all">
+                        <input
+                          type="text"
+                          required
+                          id="student-college-input"
+                          value={studentCollege}
+                          onChange={(e) => setStudentCollege(e.target.value)}
+                          placeholder="e.g. National Institute of Tech"
+                          className="w-full bg-transparent text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label htmlFor="student-grad-year-input" className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
+                        Graduation Year *
+                      </label>
+                      <div className="flex items-center h-[42px] px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all">
+                        <input
+                          type="number"
+                          required
+                          min={2020}
+                          max={2035}
+                          id="student-grad-year-input"
+                          value={studentGraduationYear}
+                          onChange={(e) => setStudentGraduationYear(e.target.value)}
+                          placeholder="e.g. 2026"
+                          className="w-full bg-transparent text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Student Field 6: College ID / Roll Number */}
+                  <div className="space-y-1">
+                    <label htmlFor="student-college-id-input" className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
+                      College ID / Roll Number *
+                    </label>
+                    <div className="flex items-center h-[42px] px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all">
+                      <input
+                        type="text"
+                        required
+                        id="student-college-id-input"
+                        value={studentCollegeId}
+                        onChange={(e) => setStudentCollegeId(e.target.value)}
+                        placeholder="e.g. UNI-2022-CS-042"
+                        className="w-full bg-transparent text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Student Field 7: College ID Document Upload Control */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
+                        College ID Proof <span className="text-gray-400 font-normal">(Optional)</span>
+                      </label>
+                      <span className="text-[11px] text-[#4A5565]">JPG, PNG, PDF ≤ 5MB</span>
+                    </div>
+
+                    <input
+                      type="file"
+                      ref={studentFileInputRef}
+                      accept="image/jpeg,image/png,application/pdf"
+                      onChange={handleStudentCollegeIdSelect}
+                      className="hidden"
+                      id="student-college-id-file-input"
                     />
-                  </svg>
-                  <input
-                    type="tel"
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+91 98765 43210"
-                    className="w-full bg-transparent pl-2.5 text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none"
-                  />
-                </div>
-              </div>
+
+                    {!studentCollegeIdFile ? (
+                      <div
+                        onClick={() => studentFileInputRef.current?.click()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            studentFileInputRef.current?.click();
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Upload College ID Document"
+                        className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-[#DADADA] bg-[#F9FAFB] hover:border-[#4B9C93] hover:bg-emerald-50/20 cursor-pointer transition-all"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200 flex items-center justify-center text-[#009689] shrink-0">
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                          </svg>
+                        </div>
+                        <div className="text-left min-w-0">
+                          <p className="text-xs font-semibold text-[#1F2937]">Upload student ID card proof</p>
+                          <p className="text-[11px] text-[#4A5565]">Attach proof for verified badge</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/30">
+                        {studentCollegeIdPreview ? (
+                          <img
+                            src={studentCollegeIdPreview}
+                            alt="ID Preview"
+                            className="w-10 h-10 object-cover rounded border border-emerald-300 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded bg-emerald-100 flex items-center justify-center text-emerald-800 font-bold text-xs shrink-0">
+                            PDF
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1 text-left">
+                          <p className="text-xs font-bold text-[#1F2937] truncate">
+                            {studentCollegeIdFile.name}
+                          </p>
+                          <p className="text-[11px] text-gray-500">
+                            {(studentCollegeIdFile.size / 1024).toFixed(1)} KB •{" "}
+                            <span className="text-emerald-700 font-semibold">Attached</span>
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveStudentCollegeId}
+                          className="text-xs font-semibold text-red-500 hover:text-red-700 px-2 py-1 rounded cursor-pointer shrink-0"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                    {studentFileError && (
+                      <p className="text-xs text-red-500 font-medium">{studentFileError}</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Field 1: Name */}
+                  <div className="space-y-1">
+                    <label className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
+                      {config.nameLabel}
+                    </label>
+                    <div className="flex items-center h-[42px] px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all">
+                      <svg
+                        className="w-4 h-4 text-[#4A5565] shrink-0 opacity-80"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M12.6672 14V12.6667C12.6672 11.9594 12.3862 11.2811 11.886 10.781C11.3859 10.281 10.7075 10 10.0002 10H5.99974C5.29241 10 4.61406 10.281 4.1139 10.781C3.61375 11.2811 3.33276 11.9594 3.33276 12.6667V14M10.6669 4.66667C10.6669 6.13943 9.47289 7.33333 7.99996 7.33333C6.52704 7.33333 5.33299 6.13943 5.33299 4.66667C5.33299 3.19391 6.52704 2 7.99996 2C9.47289 2 10.6669 3.19391 10.6669 4.66667Z"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <input
+                        type="text"
+                        required
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        placeholder={config.namePlaceholder}
+                        className="w-full bg-transparent pl-2.5 text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Field 2: Email */}
+                  <div className="space-y-1">
+                    <label className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
+                      {config.emailLabel}
+                    </label>
+                    <div className="flex items-center h-[42px] px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all">
+                      <svg
+                        className="w-4 h-4 text-[#4A5565] shrink-0 opacity-80"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M14.6672 4.66704L8.67268 8.48465C8.46926 8.60278 8.23821 8.66501 8.00296 8.66501C7.76772 8.66501 7.53666 8.60278 7.33324 8.48465L1.33276 4.66704M14.6672 4.66704V4.00044C14.6672 3.26413 14.0702 2.66724 13.3337 2.66724H2.6662C1.92977 2.66724 1.33276 3.26413 1.33276 4.00044V4.66704M14.6672 4.66704V11.9996C14.6672 12.7359 14.0702 13.3328 13.3337 13.3328H2.6662C1.92977 13.3328 1.33276 12.7359 1.33276 11.9996V4.66704"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder={config.emailPlaceholder}
+                        className="w-full bg-transparent pl-2.5 text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Field 3: Phone Number */}
+                  <div className="space-y-1">
+                    <label className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
+                      Phone Number
+                    </label>
+                    <div className="flex items-center h-[42px] px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all">
+                      <svg
+                        className="w-4 h-4 text-[#4A5565] shrink-0 opacity-80"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M9.2214 11.0458C9.35909 11.109 9.51422 11.1235 9.66122 11.0867C9.80823 11.05 9.93834 10.9643 10.0301 10.8438L10.2668 10.5337C10.391 10.3681 10.5521 10.2337 10.7372 10.1411C10.9224 10.0486 11.1266 10.0004 11.3336 10.0004H13.3337C13.6874 10.0004 14.0265 10.1409 14.2766 10.3909C14.5267 10.641 14.6672 10.9802 14.6672 11.3338V13.334C14.6672 13.6876 14.5267 14.0268 14.2766 14.2769C14.0265 14.5269 13.6874 14.6674 13.3337 14.6674C10.1509 14.6674 7.09838 13.403 4.84776 11.1524C2.59715 8.90179 1.33276 5.8493 1.33276 2.66645C1.33276 2.3128 1.47325 1.97363 1.72332 1.72356C1.97339 1.47349 2.31255 1.33301 2.6662 1.33301H4.66636C5.02001 1.33301 5.35918 1.47349 5.60925 1.72356C5.85932 1.97363 5.9998 2.3128 5.9998 2.66645V4.66661C5.9998 4.87362 5.95161 5.07779 5.85903 5.26294C5.76645 5.4481 5.63204 5.60915 5.46643 5.73336L5.1544 5.96738C5.032 6.06084 4.94573 6.19379 4.91024 6.34364C4.87476 6.4935 4.89224 6.65102 4.95972 6.78944C5.87091 8.64017 7.36953 10.1369 9.2214 11.0458Z"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <input
+                        type="tel"
+                        required
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="+91 98765 43210"
+                        className="w-full bg-transparent pl-2.5 text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {config.hasWebsite && (
+                    <div className="space-y-1">
+                      <label className="block text-xs sm:text-sm font-semibold text-[#1F2937]">
+                        Website Link
+                      </label>
+                      <div className="flex items-center h-[42px] px-3.5 rounded-lg border border-[#DADADA] bg-[#F9FAFB] focus-within:border-[#4B9C93] focus-within:bg-white transition-all">
+                        <input
+                          type="url"
+                          value={website}
+                          onChange={(e) => setWebsite(e.target.value)}
+                          placeholder={config.websitePlaceholder}
+                          className="w-full bg-transparent pl-2.5 text-xs sm:text-sm text-[#1F2937] placeholder:text-[#4A5565]/80 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
 
             
 
@@ -1574,6 +2149,11 @@ function SignupFormContent() {
                 >
                   {loading ? "Creating Account..." : "Sign Up"}
                 </button>
+                {activeRole === "student" && !studentEmailVerified && (
+                  <p className="text-[11px] text-amber-700 text-center mt-1.5 font-medium">
+                    * Please verify your email with OTP before creating your account
+                  </p>
+                )}
               </div>
             </form>
 

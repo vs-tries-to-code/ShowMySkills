@@ -28,10 +28,12 @@ import {
   X,
   Layers,
   Check,
+  Upload,
+  Image as ImageIcon,
 } from "lucide-react";
 import DashboardSidebar from "@/components/DashboardSidebar";
 import DashboardHeader from "@/components/DashboardHeader";
-import { apiRequest, applicationService, internshipService, authService } from "@/services/apiClient";
+import { apiRequest, applicationService, internshipService, authService, uploadService } from "@/services/apiClient";
 
 const statusTabs = ["All", "Applied", "Reviewing", "Shortlisted", "Interviewing", "Hired", "Rejected"];
 
@@ -80,11 +82,17 @@ function CompanyApplicationsContent() {
     department: "Engineering",
     track: "Development",
     mode: "remote",
-    location: "Remote",
-    stipend: "₹25,000 / month",
-    duration: "3 Months",
-    skills: "React, Node.js, TypeScript",
+    location: "",
+    durationChoice: "",
+    customDurationValue: "",
+    customDurationUnit: "Months",
+    skills: "",
+    compensationType: "paid",
+    stipendMin: "",
+    stipendMax: "",
     description: "",
+    posterImage: "",
+    posterUploading: false,
   });
   const [customDepartment, setCustomDepartment] = useState("");
   const [customTrack, setCustomTrack] = useState("");
@@ -92,6 +100,12 @@ function CompanyApplicationsContent() {
   const [isCustomTrack, setIsCustomTrack] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const [postingLoading, setPostingLoading] = useState(false);
+
+  const handleWorkModalityChange = (e) => {
+    const mode = e.target.value;
+    setPostForm((prev) => ({ ...prev, mode, location: mode === "remote" ? "" : prev.location }));
+    setFormErrors((prev) => ({ ...prev, location: "" }));
+  };
 
   const handleDepartmentChange = (e) => {
     const val = e.target.value;
@@ -207,10 +221,42 @@ function CompanyApplicationsContent() {
     applicationService.updateStatus(id, newStatus);
   };
 
+  // Image Upload handler for post form
+  const handlePostImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png", "image/webp", "image/svg+xml"].includes(file.type)) {
+      alert("Invalid format. Please upload JPEG, PNG, or WebP.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File exceeds maximum size of 5MB.");
+      return;
+    }
+
+    setPostForm((prev) => ({ ...prev, posterUploading: true }));
+    try {
+      const res = await uploadService.uploadInternshipPoster(file);
+      const url = res?.data?.url || res?.url;
+      if (url) {
+        setPostForm((prev) => ({ ...prev, posterImage: url, posterUploading: false }));
+      } else {
+        throw new Error("No URL returned from upload");
+      }
+    } catch (err) {
+      alert(err?.message || "Failed to upload image");
+      setPostForm((prev) => ({ ...prev, posterUploading: false }));
+    }
+  };
+
   // Handle Submit New Internship
   const handlePostInternshipSubmit = async (e) => {
     e.preventDefault();
-    if (!postForm.role.trim()) return;
+    const errors = {};
+
+    if (!postForm.role.trim()) errors.role = "Role title is required.";
 
     // Validate custom Department
     const resolvedDepartment = isCustomDepartment
@@ -218,11 +264,7 @@ function CompanyApplicationsContent() {
       : postForm.department.trim();
 
     if (!resolvedDepartment) {
-      setFormErrors((prev) => ({
-        ...prev,
-        department: "Please enter a custom department name.",
-      }));
-      return;
+      errors.department = "Please enter a custom department name.";
     }
 
     // Validate custom Track
@@ -231,59 +273,122 @@ function CompanyApplicationsContent() {
       : postForm.track.trim();
 
     if (!resolvedTrack) {
-      setFormErrors((prev) => ({
-        ...prev,
-        track: "Please enter a custom track name.",
-      }));
+      errors.track = "Please enter a custom track name.";
+    }
+
+    // Validate Location
+    if ((postForm.mode === "onsite" || postForm.mode === "hybrid") && !postForm.location.trim()) {
+      errors.location = "Location is required for Onsite and Hybrid positions.";
+    }
+
+    // Validate Duration
+    if (!postForm.durationChoice) {
+      errors.duration = "Duration is required.";
+    } else if (postForm.durationChoice === "custom") {
+      const val = Number(postForm.customDurationValue);
+      if (!postForm.customDurationValue.toString().trim() || !Number.isFinite(val) || val <= 0) {
+        errors.duration = "Please enter a positive duration value (e.g. 10 Weeks or 4 Months).";
+      }
+    }
+
+    // Validate Skills
+    const skillsArray = postForm.skills
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (skillsArray.length === 0) {
+      errors.skills = "At least one required skill must be provided.";
+    }
+
+    // Validate Compensation
+    if (postForm.compensationType === "paid") {
+      const min = postForm.stipendMin !== "" ? Number(postForm.stipendMin) : NaN;
+      const max = postForm.stipendMax !== "" ? Number(postForm.stipendMax) : NaN;
+      if (Number.isNaN(min) || Number.isNaN(max)) {
+        errors.stipend = "Both minimum and maximum monthly stipend amounts are required.";
+      } else if (min < 0 || max < 0) {
+        errors.stipend = "Stipend amounts cannot be negative.";
+      } else if (max <= min) {
+        errors.stipend = "Maximum stipend must be greater than minimum stipend.";
+      }
+    } else if (postForm.compensationType === "flexible") {
+      const hasMin = postForm.stipendMin !== "" && postForm.stipendMin !== null;
+      const hasMax = postForm.stipendMax !== "" && postForm.stipendMax !== null;
+      if (hasMin || hasMax) {
+        const min = Number(postForm.stipendMin);
+        const max = Number(postForm.stipendMax);
+        if (Number.isNaN(min) || Number.isNaN(max)) {
+          errors.stipend = "Both minimum and maximum stipend amounts must be specified if entered.";
+        } else if (min < 0 || max < 0) {
+          errors.stipend = "Stipend amounts cannot be negative.";
+        } else if (max <= min) {
+          errors.stipend = "Maximum stipend must be greater than minimum stipend.";
+        }
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
       return;
     }
 
     setFormErrors({});
     setPostingLoading(true);
 
-    const skillsArray = postForm.skills
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const resolvedDuration =
+      postForm.durationChoice === "custom"
+        ? `${Number(postForm.customDurationValue)} ${postForm.customDurationUnit}`
+        : postForm.durationChoice;
 
-    const newInternshipObj = {
-      id: `int-${Date.now()}`,
+    let stipendMin = 0;
+    let stipendMax = 0;
+    let stipendText = "Unpaid";
+
+    if (postForm.compensationType === "paid") {
+      stipendMin = Number(postForm.stipendMin);
+      stipendMax = Number(postForm.stipendMax);
+      stipendText = `₹${stipendMin.toLocaleString("en-IN")} - ₹${stipendMax.toLocaleString("en-IN")} / month`;
+    } else if (postForm.compensationType === "flexible") {
+      if (postForm.stipendMin !== "" && postForm.stipendMax !== "") {
+        stipendMin = Number(postForm.stipendMin);
+        stipendMax = Number(postForm.stipendMax);
+        stipendText = `₹${stipendMin.toLocaleString("en-IN")} - ₹${stipendMax.toLocaleString("en-IN")} / month (Flexible)`;
+      } else {
+        stipendText = "Flexible";
+      }
+    }
+
+    const payload = {
       role: postForm.role.trim(),
       company: currentUser?.companyProfile?.companyName || currentUser?.name || "Partner Company",
-      location: postForm.location || "Remote",
-      mode: postForm.mode,
-      stipend: postForm.stipend || "Competitive Stipend",
-      duration: postForm.duration || "3 Months",
+      location: postForm.mode === "remote" ? "" : postForm.location.trim(),
+      mode: postForm.mode.toLowerCase(),
+      duration: resolvedDuration,
+      description: postForm.description || "Internship opening building modern applications.",
+      skills: skillsArray,
       department: resolvedDepartment,
       track: resolvedTrack,
-      skills: skillsArray,
+      compensationType: postForm.compensationType,
+      stipendMin,
+      stipendMax,
+      stipendText,
+      stipend: stipendText,
+      posterImage: postForm.posterImage || "",
       status: "active",
-      postedDate: "Just now",
-      description: postForm.description || "Internship opening building modern applications.",
     };
 
     try {
-      const created = await apiRequest("/internships", "POST", {
-        role: newInternshipObj.role,
-        company: newInternshipObj.company,
-        location: newInternshipObj.location,
-        mode: newInternshipObj.mode.toLowerCase(),
-        stipend: newInternshipObj.stipend,
-        duration: newInternshipObj.duration,
-        description: newInternshipObj.description,
-        skills: skillsArray,
-        department: resolvedDepartment,
-        track: resolvedTrack,
-      });
+      const created = await apiRequest("/internships", "POST", payload);
 
-      const savedInternship = created?.data?.internship || created?.data || newInternshipObj;
+      const savedInternship = created?.data?.internship || created?.data || { ...payload, id: `int-${Date.now()}` };
       setCompanyInternships((prev) => [savedInternship, ...prev]);
       setSelectedInternshipId(savedInternship._id || savedInternship.id);
       setSelectedTab("All");
       handleClosePostModal();
 
       // Show success toast
-      setSuccessToast(`"${savedInternship.role || newInternshipObj.role}" posted successfully!`);
+      setSuccessToast(`"${savedInternship.role || payload.role}" posted successfully!`);
       setTimeout(() => setSuccessToast(""), 4000);
     } catch (err) {
       alert(err.message || "Failed to post internship to database. Please try again.");
@@ -297,11 +402,17 @@ function CompanyApplicationsContent() {
       department: "Engineering",
       track: "Development",
       mode: "remote",
-      location: "Remote",
-      stipend: "₹25,000 / month",
-      duration: "3 Months",
-      skills: "React, Node.js, TypeScript",
+      location: "",
+      durationChoice: "",
+      customDurationValue: "",
+      customDurationUnit: "Months",
+      skills: "",
+      compensationType: "paid",
+      stipendMin: "",
+      stipendMax: "",
       description: "",
+      posterImage: "",
+      posterUploading: false,
     });
     setCustomDepartment("");
     setCustomTrack("");
@@ -346,16 +457,6 @@ function CompanyApplicationsContent() {
             </div>
 
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setShowPostModal(true)}
-                id="ats-post-internship-btn"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#009689] hover:bg-[#007e73] active:scale-[0.98] text-white text-xs sm:text-sm font-bold shadow-md shadow-[#009689]/20 transition-all cursor-pointer"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>+ Post Internship</span>
-              </button>
-
               <span className="text-xs font-semibold px-3 py-2 rounded-full bg-white border border-gray-200 text-gray-700 shadow-2xs shrink-0">
                 {applications.length} Total Applicants
               </span>
@@ -662,13 +763,6 @@ function CompanyApplicationsContent() {
                     View All Internships
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setShowPostModal(true)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-[#4B9C93] text-white hover:bg-[#3d867e] transition-colors"
-                >
-                  Post New Opening
-                </button>
               </div>
             </div>
           )}
@@ -877,15 +971,15 @@ function CompanyApplicationsContent() {
                     </div>
                   </div>
 
-                  {/* Grid: Work Modality & Location */}
+                  {/* Grid: Work Modality & Conditional Location */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Work Modality
+                        Work Modality *
                       </label>
                       <select
                         value={postForm.mode}
-                        onChange={(e) => setPostForm({ ...postForm, mode: e.target.value })}
+                        onChange={handleWorkModalityChange}
                         className="w-full h-11 px-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:border-[#4B9C93] focus:bg-white transition-all cursor-pointer"
                       >
                         <option value="remote">Remote (Anywhere)</option>
@@ -894,64 +988,307 @@ function CompanyApplicationsContent() {
                       </select>
                     </div>
 
-                    <div className="space-y-1.5">
+                    {postForm.mode !== "remote" && <div className="space-y-1.5">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Location
+                        Location *
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. Bengaluru, India or Remote"
+                        required
+                        required
+                        maxLength={150}
+                        placeholder="e.g. Bengaluru, Karnataka or Head Office"
                         value={postForm.location}
-                        onChange={(e) => setPostForm({ ...postForm, location: e.target.value })}
-                        className="w-full h-11 px-3.5 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:border-[#4B9C93] focus:bg-white transition-all"
+                        onChange={(e) => {
+                          setPostForm({ ...postForm, location: e.target.value });
+                          if (formErrors.location) setFormErrors((prev) => ({ ...prev, location: "" }));
+                        }}
+                        aria-invalid={Boolean(formErrors.location)}
+                        className={`w-full h-11 px-3.5 rounded-xl border ${formErrors.location ? "border-red-400 bg-red-50/30" : "border-gray-200 bg-gray-50"} text-sm text-gray-900 focus:outline-none focus:border-[#4B9C93] focus:bg-white transition-all`}
                       />
-                    </div>
+                      {formErrors.location && <p className="text-[11px] text-red-500 font-medium">{formErrors.location}</p>}
+                    </div>}
                   </div>
 
-                  {/* Grid: Monthly Stipend & Duration */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Monthly Stipend
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. ₹25,000 / month"
-                        value={postForm.stipend}
-                        onChange={(e) => setPostForm({ ...postForm, stipend: e.target.value })}
-                        className="w-full h-11 px-3.5 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:border-[#4B9C93] focus:bg-white transition-all"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Internship Duration
-                      </label>
+                  {/* Duration: Presets or Custom */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                      Internship Duration *
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <select
-                        value={postForm.duration}
-                        onChange={(e) => setPostForm({ ...postForm, duration: e.target.value })}
+                        value={postForm.durationChoice}
+                        onChange={(e) => {
+                          setPostForm((prev) => ({
+                            ...prev,
+                            durationChoice: e.target.value,
+                          }));
+                          if (formErrors.duration) {
+                            setFormErrors((prev) => ({ ...prev, duration: "" }));
+                          }
+                        }}
                         className="w-full h-11 px-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:border-[#4B9C93] focus:bg-white transition-all cursor-pointer"
                       >
-                        <option value="2 Months">2 Months</option>
-                        <option value="3 Months">3 Months</option>
-                        <option value="4 Months">4 Months</option>
-                        <option value="6 Months">6 Months</option>
+                        <option value="">Select duration...</option>
+                        {["1 Month", "2 Months", "3 Months", "6 Months"].map((dur) => (
+                          <option key={dur} value={dur}>
+                            {dur}
+                          </option>
+                        ))}
+                        <option value="custom">+ Custom Duration</option>
                       </select>
+
+                      {postForm.durationChoice === "custom" && (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            placeholder="Value (e.g. 10)"
+                            value={postForm.customDurationValue}
+                            onChange={(e) => {
+                              setPostForm((prev) => ({
+                                ...prev,
+                                customDurationValue: e.target.value,
+                              }));
+                              if (formErrors.duration) {
+                                setFormErrors((prev) => ({ ...prev, duration: "" }));
+                              }
+                            }}
+                            className="w-1/2 h-11 px-3.5 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:border-[#4B9C93] focus:bg-white transition-all"
+                          />
+                          <select
+                            value={postForm.customDurationUnit}
+                            onChange={(e) =>
+                              setPostForm((prev) => ({
+                                ...prev,
+                                customDurationUnit: e.target.value,
+                              }))
+                            }
+                            className="w-1/2 h-11 px-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:border-[#4B9C93] focus:bg-white transition-all cursor-pointer"
+                          >
+                            <option value="Weeks">Weeks</option>
+                            <option value="Months">Months</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
+                    {formErrors.duration && (
+                      <p className="text-[11px] text-red-500 font-medium">
+                        {formErrors.duration}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Compensation Model */}
+                  <div className="space-y-2 p-3 bg-gray-50/80 rounded-xl border border-gray-200">
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                      Compensation Model *
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: "paid", label: "Paid" },
+                        { id: "unpaid", label: "Unpaid" },
+                        { id: "flexible", label: "Flexible" },
+                      ].map((type) => (
+                        <button
+                          key={type.id}
+                          type="button"
+                          onClick={() => {
+                            setPostForm((prev) => ({
+                              ...prev,
+                              compensationType: type.id,
+                            }));
+                            if (formErrors.stipend) {
+                              setFormErrors((prev) => ({ ...prev, stipend: "" }));
+                            }
+                          }}
+                          className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer text-center ${
+                            postForm.compensationType === type.id
+                              ? "bg-[#4B9C93] text-white shadow-2xs"
+                              : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"
+                          }`}
+                        >
+                          {type.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Paid: Required Min and Max */}
+                    {postForm.compensationType === "paid" && (
+                      <div className="pt-2">
+                        <p className="text-[11px] text-gray-500 mb-1.5 font-medium">
+                          Monthly Stipend Range (₹) *
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Min (e.g. 15000)"
+                            value={postForm.stipendMin}
+                            onChange={(e) => {
+                              setPostForm((prev) => ({
+                                ...prev,
+                                stipendMin: e.target.value,
+                              }));
+                              if (formErrors.stipend) {
+                                setFormErrors((prev) => ({ ...prev, stipend: "" }));
+                              }
+                            }}
+                            className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-[#4B9C93]"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Max (e.g. 25000)"
+                            value={postForm.stipendMax}
+                            onChange={(e) => {
+                              setPostForm((prev) => ({
+                                ...prev,
+                                stipendMax: e.target.value,
+                              }));
+                              if (formErrors.stipend) {
+                                setFormErrors((prev) => ({ ...prev, stipend: "" }));
+                              }
+                            }}
+                            className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-[#4B9C93]"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Unpaid Notice */}
+                    {postForm.compensationType === "unpaid" && (
+                      <p className="text-[11px] text-gray-500 italic pt-1">
+                        This internship is Unpaid. No monetary stipend amount will be saved.
+                      </p>
+                    )}
+
+                    {/* Flexible: Optional Range */}
+                    {postForm.compensationType === "flexible" && (
+                      <div className="pt-2">
+                        <p className="text-[11px] text-gray-500 mb-1.5 font-medium">
+                          Monthly Stipend Range (₹) — <em>Optional</em>
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Min (optional)"
+                            value={postForm.stipendMin}
+                            onChange={(e) => {
+                              setPostForm((prev) => ({
+                                ...prev,
+                                stipendMin: e.target.value,
+                              }));
+                              if (formErrors.stipend) {
+                                setFormErrors((prev) => ({ ...prev, stipend: "" }));
+                              }
+                            }}
+                            className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-[#4B9C93]"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Max (optional)"
+                            value={postForm.stipendMax}
+                            onChange={(e) => {
+                              setPostForm((prev) => ({
+                                ...prev,
+                                stipendMax: e.target.value,
+                              }));
+                              if (formErrors.stipend) {
+                                setFormErrors((prev) => ({ ...prev, stipend: "" }));
+                              }
+                            }}
+                            className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-[#4B9C93]"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {formErrors.stipend && (
+                      <p className="text-[11px] text-red-500 font-medium">
+                        {formErrors.stipend}
+                      </p>
+                    )}
                   </div>
 
                   {/* Required Skills */}
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                      Required Skills (comma separated)
+                      Required Skills (comma separated) *
                     </label>
                     <input
                       type="text"
                       placeholder="e.g. React, Docker, Python"
                       value={postForm.skills}
-                      onChange={(e) => setPostForm({ ...postForm, skills: e.target.value })}
-                      className="w-full h-11 px-3.5 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:border-[#4B9C93] focus:bg-white transition-all"
+                      onChange={(e) => {
+                        setPostForm({ ...postForm, skills: e.target.value });
+                        if (formErrors.skills) {
+                          setFormErrors((prev) => ({ ...prev, skills: "" }));
+                        }
+                      }}
+                      className={`w-full h-11 px-3.5 rounded-xl border ${
+                        formErrors.skills ? "border-red-400 bg-red-50/30" : "border-gray-200 bg-gray-50"
+                      } text-sm text-gray-900 focus:outline-none focus:border-[#4B9C93] focus:bg-white transition-all`}
                     />
+                    {formErrors.skills && (
+                      <p className="text-[11px] text-red-500 font-medium">
+                        {formErrors.skills}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Optional Poster Image Upload */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                      Poster Image (Optional)
+                    </label>
+
+                    {postForm.posterImage ? (
+                      <div className="relative w-full h-28 rounded-xl overflow-hidden border border-gray-200 bg-gray-100 group">
+                        <img
+                          src={postForm.posterImage}
+                          alt="Poster Preview"
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setPostForm((prev) => ({ ...prev, posterImage: "" }))}
+                          className="absolute top-2 right-2 p-1.5 rounded-lg bg-gray-900/70 hover:bg-gray-900 text-white text-xs cursor-pointer"
+                          title="Remove Poster"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-gray-200 hover:border-[#4B9C93] rounded-xl bg-gray-50 cursor-pointer transition-colors">
+                        {postForm.posterUploading ? (
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <div className="w-4 h-4 border-2 border-[#4B9C93]/20 border-t-[#4B9C93] rounded-full animate-spin" />
+                            <span>Uploading image...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload className="w-5 h-5 text-gray-400 mb-1" />
+                            <span className="text-xs font-medium text-gray-600">
+                              Click to upload poster image
+                            </span>
+                            <span className="text-[10px] text-gray-400 mt-0.5">
+                              PNG, JPG, or WebP (max 5MB)
+                            </span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          onChange={handlePostImageUpload}
+                          className="hidden"
+                          disabled={postForm.posterUploading}
+                        />
+                      </label>
+                    )}
                   </div>
 
                   {/* Description */}

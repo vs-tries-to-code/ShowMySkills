@@ -34,6 +34,10 @@ const internshipSchema = new mongoose.Schema(
       enum: ['remote', 'onsite', 'hybrid'],
       default: 'remote',
     },
+    posterImage: {
+      type: String,
+      default: '',
+    },
     department: {
       type: String,
       default: '',
@@ -43,6 +47,15 @@ const internshipSchema = new mongoose.Schema(
       type: String,
       default: '',
       trim: true,
+    },
+    compensationType: {
+      type: String,
+      enum: ['paid', 'unpaid', 'flexible'],
+      default: 'paid',
+    },
+    stipend: {
+      type: String,
+      default: '',
     },
     stipendMin: {
       type: Number,
@@ -60,7 +73,7 @@ const internshipSchema = new mongoose.Schema(
     },
     duration: {
       type: String,
-      default: '3 Months',
+      default: '',
     },
     skills: {
       type: [String],

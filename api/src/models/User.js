@@ -243,6 +243,7 @@ const userSchema = new mongoose.Schema(
     // Company specific embedded profile
     companyProfile: {
       companyName: { type: String, default: '' },
+      logo: { type: String, default: '' },
       tagline: { type: String, default: '' },
       aboutCompany: { type: String, default: '' },
       establishedYear: { type: Number },

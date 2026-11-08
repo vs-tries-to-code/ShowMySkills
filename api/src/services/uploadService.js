@@ -11,6 +11,7 @@ const uploadFolders = [
   'uploads/chat-attachments',
   'uploads/college-ids',
   'uploads/admin-photos',
+  'uploads/internship-posters',
 ];
 
 for (const folder of uploadFolders) {
@@ -102,6 +103,12 @@ export const uploadChatAttachment = multer({
   storage: createStorage('chat-attachments'),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: mixedProofFilter,
+});
+
+export const uploadInternshipPoster = multer({
+  storage: createStorage('internship-posters'),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: imageFilter,
 });
 
 export const formatFileUrl = (req, file, subfolder) => {

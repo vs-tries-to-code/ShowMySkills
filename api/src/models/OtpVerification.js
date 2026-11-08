@@ -11,7 +11,7 @@ const otpVerificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['applicant_email', 'official_email'],
+      enum: ['applicant_email', 'official_email', 'signup_email'],
       required: true,
       index: true,
     },

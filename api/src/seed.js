@@ -1,8 +1,13 @@
 import dotenv from 'dotenv';
 import path from 'node:path';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const envCandidates = [
+  path.resolve(__dirname, '../.env'),
+  path.resolve(process.cwd(), 'api/.env'),
   path.resolve(process.cwd(), '.env'),
   path.resolve(process.cwd(), '../.env'),
 ];

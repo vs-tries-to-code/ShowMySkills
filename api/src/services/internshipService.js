@@ -1,4 +1,7 @@
+import mongoose from 'mongoose';
 import Internship from '../models/Internship.js';
+import Application from '../models/Application.js';
+import InternshipAction from '../models/InternshipAction.js';
 
 export const getInternships = async (query) => {
   const page = Math.max(1, Number(query.page) || 1);
@@ -24,6 +27,10 @@ export const getInternships = async (query) => {
 
   if (query.company) {
     filter.company = new RegExp(String(query.company).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  }
+
+  if (query.postedBy) {
+    filter.postedBy = query.postedBy;
   }
 
   if (query.location) {
@@ -154,6 +161,14 @@ export const deleteInternship = async (id) => {
     const error = new Error('Internship not found');
     error.statusCode = 404;
     throw error;
+  }
+  // Permanently remove associated candidate application and action records
+  if (mongoose.connection && mongoose.connection.readyState === 1) {
+    await Application.deleteMany({ internship: id });
+    await InternshipAction.deleteMany({ internship: id });
+  } else if (typeof Application.deleteMany === 'function' && Application.deleteMany !== mongoose.Model?.deleteMany) {
+    await Application.deleteMany({ internship: id });
+    await InternshipAction.deleteMany?.({ internship: id });
   }
   return deleted;
 };

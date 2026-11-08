@@ -131,4 +131,28 @@ export const uploadController = {
       next(error);
     }
   },
+
+  // Upload internship poster image
+  handleInternshipPosterUpload: async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No poster image uploaded' });
+      }
+
+      const fileUrl = formatFileUrl(req, req.file, 'internship-posters');
+
+      res.status(201).json({
+        success: true,
+        message: 'Internship poster uploaded successfully',
+        data: {
+          url: fileUrl,
+          filename: req.file.filename,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
 };

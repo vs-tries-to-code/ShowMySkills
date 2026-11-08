@@ -7,6 +7,7 @@ import {
   uploadCertificate,
   uploadCompanyLogo,
   uploadChatAttachment,
+  uploadInternshipPoster,
 } from '../services/uploadService.js';
 import { submissionRateLimiter } from '../middleware/security.js';
 
@@ -221,5 +222,6 @@ router.post('/logo', uploadCompanyLogo.single('file'), uploadController.handleLo
  *                     url: { type: string, example: 'http://localhost:5000/uploads/chat-attachments/att-102.pdf' }
  */
 router.post('/attachment', uploadChatAttachment.single('file'), uploadController.handleAttachmentUpload);
+router.post('/internship-poster', uploadInternshipPoster.single('file'), uploadController.handleInternshipPosterUpload);
 
 export default router;
