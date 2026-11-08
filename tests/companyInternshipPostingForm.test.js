@@ -92,6 +92,18 @@ test('Duration: Accepts valid preset and custom durations', () => {
   const custom = runValidation({ duration: '10 Weeks' });
   assert.strictEqual(custom.nextCalled, true);
   assert.strictEqual(custom.body.duration, '10 Weeks');
+
+  const fractional = runValidation({ duration: '1.5 Months' });
+  assert.strictEqual(fractional.nextCalled, true);
+  assert.strictEqual(fractional.body.duration, '1.5 Months');
+});
+
+test('Duration: Rejects unsupported units and malformed custom values', () => {
+  for (const duration of ['10 Days', '1.5.2 Months', '1Months']) {
+    const result = runValidation({ duration });
+    assert.strictEqual(result.nextCalled, false, `${duration} should be rejected`);
+    assert.strictEqual(result.statusCode, 400);
+  }
 });
 
 test('Duration: Rejects zero or negative duration values', () => {

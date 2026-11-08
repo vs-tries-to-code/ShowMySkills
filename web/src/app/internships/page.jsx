@@ -575,9 +575,10 @@ export default function InternshipsPage() {
           )}
         </AnimatePresence>
 
-        <main className="flex-1 flex flex-col items-center px-4 sm:px-6 py-3 sm:py-4 overflow-y-auto min-h-0">
-          {/* ──── Search Bar & Filter Button ──── */}
-          <div className="flex items-center gap-2.5 sm:gap-3 mb-4 sm:mb-5 w-full max-w-3xl mx-auto shrink-0 z-10">
+        <main className="flex-1 flex flex-col items-center px-4 sm:px-6 py-0 overflow-y-auto min-h-0">
+          {/* ──── Search Bar & Filter Button (Sticky) ──── */}
+          <div className="sticky top-0 z-20 bg-[#F7F9F9] pt-3 sm:pt-4 pb-2 sm:pb-3 w-full max-w-3xl mx-auto shrink-0">
+            <div className="flex items-center gap-2.5 sm:gap-3">
             {/* Search Input Container */}
             <div className="flex-1 relative flex items-center bg-white border-2 border-[#E5E6E5] rounded-full h-11 sm:h-12 px-4 sm:px-5 shadow-xs focus-within:border-[#4B9C93] focus-within:ring-2 focus-within:ring-[#4B9C93]/15 transition-all">
               <Search className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-[#292D32] shrink-0" strokeWidth={2} />
@@ -621,16 +622,26 @@ export default function InternshipsPage() {
                 <SlidersHorizontal className="w-4 h-4 sm:w-5 sm:h-5 text-[#292D32]" strokeWidth={2} />
               </button>
             )}
+            </div>
           </div>
 
-          {/* Filter panel (Discovery Feed only) */}
+          {/* Filter panel (Discovery Feed only) — mobile = fixed modal, desktop = inline */}
+          {activeTab === "Internships" && showFilters && (
+            <>
+              {/* Mobile backdrop */}
+              <div
+                className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 sm:hidden"
+                onClick={() => setShowFilters(false)}
+              />
+            </>
+          )}
           <AnimatePresence>
             {activeTab === "Internships" && showFilters && (
               <motion.div
                 initial={{ opacity: 0, height: 0, y: -8 }}
                 animate={{ opacity: 1, height: "auto", y: 0 }}
                 exit={{ opacity: 0, height: 0, y: -8 }}
-                className="w-full max-w-[600px] overflow-hidden mb-6"
+                className="fixed sm:relative inset-x-4 top-24 sm:inset-x-auto sm:top-auto w-auto sm:w-full sm:max-w-[600px] overflow-hidden sm:mb-6 z-50 sm:z-auto"
               >
                 <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
@@ -780,7 +791,7 @@ export default function InternshipsPage() {
           {activeTab === "Internships" ? (
             <div className="w-full flex flex-col items-center justify-start sm:justify-center my-auto py-2 shrink-0 min-h-0">
               {/* Internship Swipe Deck */}
-              <div className="relative w-[360px] sm:w-[400px] md:w-[430px] lg:w-[450px] max-w-[92vw] h-[380px] sm:h-[410px] md:h-[430px] lg:h-[440px] max-h-[calc(100vh-270px)] mb-4 sm:mb-5 flex items-center justify-center shrink-0">
+              <div className="relative w-full max-w-[360px] sm:max-w-[400px] md:max-w-[430px] lg:max-w-[450px] h-[410px] sm:h-[420px] md:h-[440px] max-h-[calc(100vh-230px)] mb-3 sm:mb-5 flex items-center justify-center shrink-0">
                 {loading || loadingMore ? (
                   <div className="flex flex-col items-center gap-3 text-sm text-gray-500">
                     <div className="w-8 h-8 border-4 border-[#4B9C93]/20 border-t-[#4B9C93] rounded-full animate-spin" />

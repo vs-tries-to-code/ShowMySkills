@@ -64,12 +64,12 @@ const parseDuration = (rawDuration) => {
   if (PRESET_DURATIONS.includes(trimmed)) {
     return { choice: trimmed, customVal: "", customUnit: "Months" };
   }
-  const match = trimmed.match(/^(\d+)\s*(weeks?|months?)/i);
+  const match = trimmed.match(/^(\d+(?:\.\d+)?)\s+(weeks?|months?)$/i);
   if (match) {
     const unit = match[2].toLowerCase().startsWith("week") ? "Weeks" : "Months";
     return { choice: "custom", customVal: match[1], customUnit: unit };
   }
-  return { choice: "custom", customVal: trimmed.replace(/\D/g, "") || "", customUnit: "Months" };
+  return { choice: "custom", customVal: "", customUnit: "Months" };
 };
 
 export default function CompanyInternshipsPage() {
@@ -381,7 +381,7 @@ export default function CompanyInternshipsPage() {
       errors.duration = "Duration is required";
     } else if (formState.durationChoice === "custom") {
       const val = Number(formState.customDurationValue);
-      if (!formState.customDurationValue.toString().trim() || Number.isNaN(val) || val <= 0) {
+      if (!formState.customDurationValue.toString().trim() || !Number.isFinite(val) || val <= 0) {
         errors.duration = "Please enter a positive duration value (e.g. 10 Weeks or 4 Months)";
       }
     }
@@ -1400,7 +1400,8 @@ export default function CompanyInternshipsPage() {
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
-                        min="1"
+                        step="any"
+                        min="0"
                         placeholder="Value (e.g. 10)"
                         value={editModal.customDurationValue}
                         onChange={(e) =>
@@ -1924,7 +1925,8 @@ export default function CompanyInternshipsPage() {
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
-                        min="1"
+                        step="any"
+                        min="0"
                         placeholder="Value (e.g. 10)"
                         value={createModal.customDurationValue}
                         onChange={(e) =>

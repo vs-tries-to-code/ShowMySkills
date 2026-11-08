@@ -13,6 +13,10 @@ export default async function Page({ params }) {
     redirect('/signup?role=admin');
   }
 
+  if (role === 'student') {
+    redirect('/signup?role=student');
+  }
+
   const config = signupConfig[role];
 
   if (!config) {

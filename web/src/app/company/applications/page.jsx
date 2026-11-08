@@ -286,7 +286,7 @@ function CompanyApplicationsContent() {
       errors.duration = "Duration is required.";
     } else if (postForm.durationChoice === "custom") {
       const val = Number(postForm.customDurationValue);
-      if (!postForm.customDurationValue.toString().trim() || Number.isNaN(val) || val <= 0) {
+      if (!postForm.customDurationValue.toString().trim() || !Number.isFinite(val) || val <= 0) {
         errors.duration = "Please enter a positive duration value (e.g. 10 Weeks or 4 Months).";
       }
     }
@@ -1042,7 +1042,8 @@ function CompanyApplicationsContent() {
                         <div className="flex items-center gap-2">
                           <input
                             type="number"
-                            min="1"
+                            step="any"
+                            min="0"
                             placeholder="Value (e.g. 10)"
                             value={postForm.customDurationValue}
                             onChange={(e) => {

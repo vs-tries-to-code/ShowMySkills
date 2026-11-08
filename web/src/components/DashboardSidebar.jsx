@@ -147,7 +147,7 @@ export default function DashboardSidebar() {
     <>
       {/* ──── Mobile Backdrop Blur Overlay ──── */}
       <div
-        className={`fixed inset-0 bg-black/40 backdrop-blur-2xs z-40 transition-opacity duration-300 md:hidden ${
+        className={`fixed inset-0 bg-black/50 backdrop-blur-xs z-[99] transition-opacity duration-300 md:hidden ${
           isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
         onClick={closeSidebar}
@@ -157,7 +157,7 @@ export default function DashboardSidebar() {
       {/* ──── Main Animated Sidebar ──── */}
       <aside
         id="dashboard-sidebar"
-        className={`fixed left-0 top-0 bottom-0 w-[240px] sm:w-[250px] md:w-[220px] bg-[#4B9C93] flex flex-col justify-between z-50 overflow-hidden py-4 px-3 shadow-2xl md:shadow-none transition-transform duration-300 ease-in-out md:translate-x-0 ${
+        className={`fixed left-0 top-0 bottom-0 w-[280px] sm:w-[280px] md:w-[220px] bg-[#4B9C93] flex flex-col justify-between z-[100] overflow-hidden py-4 px-3 shadow-2xl md:shadow-none transition-transform duration-300 ease-in-out md:translate-x-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{ borderTopRightRadius: "24px", borderBottomRightRadius: "24px" }}
