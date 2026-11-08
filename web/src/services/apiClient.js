@@ -393,6 +393,7 @@ export const authService = {
     tokenStorage.clearTokens();
     if (typeof window !== "undefined") {
       localStorage.removeItem("user");
+      sessionStorage.removeItem("user");
     }
     return { success: true };
   },

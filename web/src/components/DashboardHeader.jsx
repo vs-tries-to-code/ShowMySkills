@@ -16,9 +16,11 @@ import {
   Rocket,
   CheckCircle2,
   ExternalLink,
+  Building2,
+  LayoutDashboard,
 } from "lucide-react";
 import { useSidebar } from "@/context/SidebarContext";
-import { notificationService } from "@/services/apiClient";
+import { notificationService, authService, tokenStorage } from "@/services/apiClient";
 import { getUserRole, useAuth } from "@/hooks/useAuth";
 
 export default function DashboardHeader({
@@ -74,6 +76,39 @@ export default function DashboardHeader({
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
     notificationService.markRead();
   };
+
+  // Handle role sign-out and session cleanup, redirecting to public landing page (/)
+  const handleLogout = async () => {
+    setShowProfileMenu(false);
+    try {
+      await authService.logout();
+    } catch (err) {
+      console.error("Logout error:", err);
+      tokenStorage.clearTokens();
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("user");
+        sessionStorage.removeItem("user");
+      }
+    }
+    window.location.href = "/";
+  };
+
+  // Redirect unauthenticated sessions away from protected routes (e.g. after logout or on browser Back)
+  useEffect(() => {
+    if (authResolved && !hasSession) {
+      const isProtected =
+        pathname.startsWith("/admin") ||
+        pathname.startsWith("/company") ||
+        pathname.startsWith("/college") ||
+        pathname.startsWith("/student") ||
+        pathname === "/profile" ||
+        pathname === "/settings";
+
+      if (isProtected) {
+        window.location.replace("/login");
+      }
+    }
+  }, [authResolved, hasSession, pathname]);
 
   const routeRole = pathname.startsWith("/company")
     ? "company"
@@ -385,14 +420,15 @@ export default function DashboardHeader({
 
                   <div className="my-1 border-t border-gray-100" />
 
-                  <Link
-                    href="/login"
-                    onClick={() => setShowProfileMenu(false)}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    id="header-logout-btn"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer text-left"
                   >
                     <LogOut className="w-4 h-4 text-red-500" />
                     <span>Log Out</span>
-                  </Link>
+                  </button>
                 </div>
               )}
             </div>
