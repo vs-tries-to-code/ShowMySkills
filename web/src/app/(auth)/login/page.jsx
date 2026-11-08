@@ -79,21 +79,29 @@ function LoginFormContent() {
       console.error("Login request failed:", err);
 
       const status = err?.status || err?.data?.statusCode;
-      const rawMsg = String(err?.message || err?.data?.message || "").toLowerCase();
+      const rawMsg = err?.data?.message || err?.message || "";
+      const lowerMsg = String(rawMsg).toLowerCase();
 
       if (
+        status === 403 ||
+        err?.data?.code === "ROLE_MISMATCH" ||
+        lowerMsg.includes("not registered as") ||
+        lowerMsg.includes("account type")
+      ) {
+        setError(rawMsg || "This account is not registered for this account type. Choose the correct account type.");
+      } else if (
         status === 401 ||
         status === 400 ||
-        rawMsg.includes("invalid") ||
-        rawMsg.includes("incorrect") ||
-        rawMsg.includes("password") ||
-        rawMsg.includes("credential")
+        lowerMsg.includes("invalid") ||
+        lowerMsg.includes("incorrect") ||
+        lowerMsg.includes("password") ||
+        lowerMsg.includes("credential")
       ) {
         setError("Email or password is incorrect.");
       } else if (
         status === 429 ||
-        rawMsg.includes("too many") ||
-        rawMsg.includes("rate limit")
+        lowerMsg.includes("too many") ||
+        lowerMsg.includes("rate limit")
       ) {
         setError("Too many login attempts. Please try again in a moment.");
       } else {
@@ -102,6 +110,12 @@ function LoginFormContent() {
       }
       setLoading(false);
     }
+  };
+
+  const handleGoogleSignIn = () => {
+    setError(
+      `Google sign-in is not supported for ${config.title}. Please sign in using your email and password.`
+    );
   };
 
   return (
@@ -298,7 +312,7 @@ function LoginFormContent() {
             {/* Google SSO Button */}
             <button
               type="button"
-              onClick={() => router.push(config.dashboardRoute)}
+              onClick={handleGoogleSignIn}
               className="w-full h-[48px] rounded-xl border border-[#D1D5DC] bg-white hover:bg-gray-50 flex items-center justify-center gap-2.5 transition-colors cursor-pointer shadow-2xs"
             >
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
