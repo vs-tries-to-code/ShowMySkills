@@ -34,13 +34,7 @@ function VerifyEmailForm() {
     try {
       setIsLoading(true);
 
-      const res = await authService.verifyEmail(email, otp);
-      if (res?.data) {
-        const token = res.data.accessToken || res.data.token;
-        if (token) localStorage.setItem("token", token);
-        if (res.data.refreshToken) localStorage.setItem("refreshToken", res.data.refreshToken);
-        localStorage.setItem("user", JSON.stringify(res.data.user || res.data));
-      }
+      await authService.verifyEmail(email, otp);
       router.push('/login');
 
     } catch (err) {

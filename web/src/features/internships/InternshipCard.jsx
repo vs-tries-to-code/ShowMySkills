@@ -12,6 +12,7 @@ import {
   Monitor,
   Bookmark,
 } from "lucide-react";
+import { getSwipeDirection } from "@/features/internships/feedUtils.mjs";
 
 /**
  * InternshipCard — Interactive, swipeable internship card.
@@ -58,21 +59,8 @@ export default function InternshipCard({
   // Handle drag release
   const handleDragEnd = (_, info) => {
     if (!isTopCard) return;
-
-    const swipeThreshold = 110;
-    const velocityThreshold = 400;
-
-    if (
-      info.offset.x > swipeThreshold ||
-      info.velocity.x > velocityThreshold
-    ) {
-      onSwipe?.("right");
-    } else if (
-      info.offset.x < -swipeThreshold ||
-      info.velocity.x < -velocityThreshold
-    ) {
-      onSwipe?.("left");
-    }
+    const direction = getSwipeDirection(info.offset.x, info.velocity.x);
+    if (direction) onSwipe?.(direction);
   };
 
   // Background card stack

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { authService } from "@/services/apiClient";
+import { getEmailVerificationPath } from "@/features/auth/authFlowUtils.mjs";
 
 const signupRoleConfigs = {
   student: {
@@ -756,7 +757,7 @@ function SignupFormContent() {
 
     setLoading(true);
     try {
-      const res = await authService.register({
+      await authService.register({
         name: fullName,
         email,
         phone,
@@ -764,16 +765,9 @@ function SignupFormContent() {
         password,
         role: activeRole,
       });
-      if (res && res.token) {
-        localStorage.setItem("showmyskills_token", res.token);
-        localStorage.setItem(
-          "showmyskills_user",
-          JSON.stringify(res.user || { name: fullName, email, role: activeRole })
-        );
-      }
       setTimeout(() => {
         setLoading(false);
-        router.push(config.dashboardRoute);
+        router.push(getEmailVerificationPath(email));
       }, 400);
     } catch (err) {
       setLoading(false);

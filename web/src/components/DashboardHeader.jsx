@@ -38,7 +38,7 @@ export default function DashboardHeader({
     let isMounted = true;
     notificationService.list().then((res) => {
       if (isMounted && res && Array.isArray(res)) {
-        setNotifications(res);
+        setNotifications(uniqueNotifications(res));
       }
     }).catch(() => {});
     return () => {
@@ -71,7 +71,7 @@ export default function DashboardHeader({
   const unreadCount = notifications.filter((n) => n.unread).length;
 
   const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+    setNotifications((previous) => markNotificationsRead(previous));
     notificationService.markRead();
   };
 
@@ -195,15 +195,11 @@ export default function DashboardHeader({
                     )}
                   </div>
                   <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
-                    {notifications.map((n, index) => (
-                      <div key={n._id || n.id || index} className="py-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-xs text-gray-900">{n.title}</span>
-                          <span className="text-[10px] text-gray-400">{n.time}</span>
-                        </div>
-                        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{n.desc}</p>
-                      </div>
-                    ))}
+                    <NotificationList
+                      notifications={notifications}
+                      variant="popover"
+                      onMarkRead={handleMarkRead}
+                    />
                   </div>
                 </div>
               )}
@@ -291,20 +287,11 @@ export default function DashboardHeader({
                   </div>
 
                   <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
-                    {notifications.map((n, index) => (
-                      <div
-                        key={n._id || n.id || index}
-                        className={`py-3 px-2 rounded-xl transition-colors ${
-                          n.unread ? "bg-[#E6F7F3]/30" : "hover:bg-gray-50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-xs text-gray-900">{n.title}</span>
-                          <span className="text-[10px] text-gray-400">{n.time}</span>
-                        </div>
-                        <p className="text-[11.5px] text-gray-600 mt-0.5 leading-snug">{n.desc}</p>
-                      </div>
-                    ))}
+                    <NotificationList
+                      notifications={notifications}
+                      variant="dropdown"
+                      onMarkRead={handleMarkRead}
+                    />
                   </div>
 
                   <div className="pt-2 text-center border-t border-gray-100 mt-1">

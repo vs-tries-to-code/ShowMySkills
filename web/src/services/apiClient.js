@@ -22,13 +22,15 @@ export const getApiBaseUrl = () => {
 };
 
 export const tokenStorage = {
+  // The app uses persistent login by default. Callers may opt into session storage.
+  storageType: "localStorage",
   getAccessToken: () => {
     if (typeof window === "undefined") return null;
     return (
-      localStorage.getItem("token") ||
       localStorage.getItem("accessToken") ||
-      sessionStorage.getItem("token") ||
       sessionStorage.getItem("accessToken") ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
       null
     );
   },
@@ -42,18 +44,18 @@ export const tokenStorage = {
     );
   },
 
-  setTokens: ({ accessToken, refreshToken, token }) => {
+  setTokens: ({ accessToken, refreshToken, token }, storageType = "localStorage") => {
     if (typeof window === "undefined") return;
     const access = accessToken || token;
-    if (access) {
-      localStorage.setItem("token", access);
-      localStorage.setItem("accessToken", access);
-      sessionStorage.setItem("token", access);
-      sessionStorage.setItem("accessToken", access);
+    const storage = storageType === "sessionStorage" ? sessionStorage : localStorage;
+    const otherStorage = storageType === "sessionStorage" ? localStorage : sessionStorage;
+    for (const key of ["token", "accessToken", "refreshToken", "authToken", "jwt"]) {
+      storage.removeItem(key);
+      otherStorage.removeItem(key);
     }
+    if (access) storage.setItem("accessToken", access);
     if (refreshToken) {
-      localStorage.setItem("refreshToken", refreshToken);
-      sessionStorage.setItem("refreshToken", refreshToken);
+      storage.setItem("refreshToken", refreshToken);
     }
   },
 
@@ -67,42 +69,69 @@ export const tokenStorage = {
     sessionStorage.removeItem("token");
     sessionStorage.removeItem("accessToken");
     sessionStorage.removeItem("refreshToken");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("jwt");
   },
 };
 
 let refreshPromise = null;
 
+function clearAuthenticationState() {
+  tokenStorage.clearTokens();
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("user");
+  }
+}
+
+function storeUserProfile(data) {
+  if (typeof window === "undefined" || !data || typeof data !== "object") {
+    return;
+  }
+
+  const profile = data.user && typeof data.user === "object" ? data.user : data;
+  const safeProfile = { ...profile };
+  delete safeProfile.accessToken;
+  delete safeProfile.refreshToken;
+  delete safeProfile.token;
+  localStorage.setItem("user", JSON.stringify(safeProfile));
+}
+
 async function refreshTokensDirectly() {
   const refreshToken = tokenStorage.getRefreshToken();
   if (!refreshToken) {
-    tokenStorage.clearTokens();
+    clearAuthenticationState();
     throw new Error("No refresh token available");
   }
 
   const baseUrl = getApiBaseUrl();
-  const res = await fetch(`${baseUrl}/auth/refresh`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ refreshToken }),
-  });
+  try {
+    const res = await fetch(`${baseUrl}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ refreshToken }),
+    });
 
-  if (!res.ok) {
-    tokenStorage.clearTokens();
-    const err = new Error("Session expired. Please log in again.");
-    err.status = res.status;
-    throw err;
+    if (!res.ok) {
+      const err = new Error("Session expired. Please log in again.");
+      err.status = res.status;
+      throw err;
+    }
+
+    const json = await res.json();
+    const payload = json.data || json;
+    const accessToken = payload.accessToken || payload.token;
+    if (!accessToken) {
+      throw new Error("Session could not be refreshed. Please log in again.");
+    }
+    tokenStorage.setTokens({ accessToken, refreshToken: payload.refreshToken });
+    return accessToken;
+  } catch (error) {
+    clearAuthenticationState();
+    if (error?.status) throw error;
+    throw new Error("Session could not be refreshed. Please log in again.");
   }
-
-  const json = await res.json();
-  const payload = json.data || json;
-  tokenStorage.setTokens({
-    accessToken: payload.accessToken || payload.token,
-    refreshToken: payload.refreshToken,
-  });
-
-  return payload.accessToken || payload.token;
 }
 
 /**
@@ -149,23 +178,29 @@ export async function apiRequest(endpoint, method = "GET", body = null, customHe
       tokenStorage.getRefreshToken()
     ) {
       try {
-        if (!refreshPromise) {
-          refreshPromise = refreshTokensDirectly().finally(() => {
-            refreshPromise = null;
-          });
-        }
-        const newAccessToken = await refreshPromise;
+        const latestAccessToken = tokenStorage.getAccessToken();
+        if (latestAccessToken && latestAccessToken !== accessToken) {
+          headers.Authorization = `Bearer ${latestAccessToken}`;
+          res = await fetch(`${baseUrl}${formattedEndpoint}`, { ...options, headers });
+        } else {
+          if (!refreshPromise) {
+            refreshPromise = refreshTokensDirectly().finally(() => {
+              refreshPromise = null;
+            });
+          }
+          const newAccessToken = await refreshPromise;
 
-        // Retry original request with newly issued access token
-        const retryHeaders = {
-          ...headers,
-          Authorization: `Bearer ${newAccessToken}`,
-        };
-        const retryOptions = {
-          ...options,
-          headers: retryHeaders,
-        };
-        res = await fetch(`${baseUrl}${formattedEndpoint}`, retryOptions);
+          // Retry original request with newly issued access token
+          const retryHeaders = {
+            ...headers,
+            Authorization: `Bearer ${newAccessToken}`,
+          };
+          const retryOptions = {
+            ...options,
+            headers: retryHeaders,
+          };
+          res = await fetch(`${baseUrl}${formattedEndpoint}`, retryOptions);
+        }
       } catch {
         // Refresh token failed or revoked; proceed to error handling below
       }
@@ -334,9 +369,7 @@ export const authService = {
         accessToken: res.data.accessToken || res.data.token,
         refreshToken: res.data.refreshToken,
       });
-      if (typeof window !== "undefined") {
-        localStorage.setItem("user", JSON.stringify(res.data));
-      }
+      storeUserProfile(res.data);
     }
     return res;
   },
@@ -348,6 +381,7 @@ export const authService = {
         accessToken: res.data.accessToken || res.data.token,
         refreshToken: res.data.refreshToken,
       });
+      storeUserProfile(res.data);
     }
     return res;
   },
@@ -370,11 +404,14 @@ export const authService = {
 
   verifyEmail: async (email, otp) => {
     const res = await apiRequest("/auth/verify-email", "POST", { email, otp });
-    if (res?.data?.accessToken || res?.data?.token) {
-      tokenStorage.setTokens({
-        accessToken: res.data.accessToken || res.data.token,
-        refreshToken: res.data.refreshToken,
-      });
+    if (res?.data) {
+      if (res.data.accessToken || res.data.token) {
+        tokenStorage.setTokens({
+          accessToken: res.data.accessToken || res.data.token,
+          refreshToken: res.data.refreshToken,
+        });
+      }
+      storeUserProfile(res.data);
     }
     return res;
   },
