@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   User,
@@ -10,6 +10,7 @@ import {
   Globe,
   Save,
   CheckCircle2,
+  AlertCircle,
   Building2,
   GraduationCap,
   Mail,
@@ -17,10 +18,12 @@ import {
   Camera,
   Eye,
   EyeOff,
+  Loader2,
+  Trash2,
 } from "lucide-react";
 import DashboardSidebar from "@/components/DashboardSidebar";
 import DashboardHeader from "@/components/DashboardHeader";
-import { authService, apiRequest } from "@/services/apiClient";
+import { authService, apiRequest, uploadService } from "@/services/apiClient";
 
 const tabs = [
   { id: "profile", label: "Profile Info", icon: User },
@@ -45,7 +48,20 @@ export default function SettingsPage() {
     bio: "",
     github: "",
     linkedin: "",
+    profileIcon: "",
   });
+
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+  const [avatarSuccess, setAvatarSuccess] = useState("");
+  const fileInputRef = useRef(null);
+
+  const getInitials = (name) => {
+    if (!name || !name.trim()) return "U";
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -63,6 +79,7 @@ export default function SettingsPage() {
           bio: user.bio || "",
           github: user.github || "",
           linkedin: user.linkedin || "",
+          profileIcon: user.profileIcon || "",
         }));
       }
     });
@@ -70,6 +87,84 @@ export default function SettingsPage() {
       isMounted = false;
     };
   }, []);
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
+    if (!allowedTypes.includes(file.type)) {
+      setAvatarError("Invalid file format. Only JPEG, PNG, WebP, and SVG images are allowed.");
+      setAvatarSuccess("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError("File size exceeds 5MB limit.");
+      setAvatarSuccess("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setAvatarError("");
+    setAvatarUploading(true);
+    try {
+      const res = await uploadService.uploadAvatar(file);
+      const url = res?.data?.url || res?.url;
+      if (url) {
+        setProfile((prev) => ({ ...prev, profileIcon: url }));
+        setAvatarSuccess("Profile photo updated successfully!");
+        setTimeout(() => setAvatarSuccess(""), 3000);
+
+        // Synchronize local storage user cache and dispatch events
+        try {
+          const rawUser = localStorage.getItem("user");
+          if (rawUser) {
+            const parsed = JSON.parse(rawUser);
+            parsed.profileIcon = url;
+            localStorage.setItem("user", JSON.stringify(parsed));
+            window.dispatchEvent(new Event("storage"));
+            window.dispatchEvent(new CustomEvent("user-updated", { detail: parsed }));
+          }
+        } catch {}
+      } else {
+        throw new Error("Upload did not return a valid URL");
+      }
+    } catch (err) {
+      setAvatarError(err?.message || "Failed to upload profile photo");
+    } finally {
+      setAvatarUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setAvatarError("");
+    setAvatarSuccess("");
+    setAvatarUploading(true);
+    try {
+      await apiRequest("/auth/me", "PUT", { profileIcon: null });
+      setProfile((prev) => ({ ...prev, profileIcon: "" }));
+      try {
+        const rawUser = localStorage.getItem("user");
+        if (rawUser) {
+          const parsed = JSON.parse(rawUser);
+          parsed.profileIcon = null;
+          localStorage.setItem("user", JSON.stringify(parsed));
+          window.dispatchEvent(new Event("storage"));
+          window.dispatchEvent(new CustomEvent("user-updated", { detail: parsed }));
+        }
+      } catch {}
+      setAvatarSuccess("Profile photo removed.");
+      setTimeout(() => setAvatarSuccess(""), 3000);
+    } catch (err) {
+      setAvatarError(err?.message || "Failed to remove photo");
+    } finally {
+      setAvatarUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   // Security Form state
   const [passwords, setPasswords] = useState({
@@ -102,6 +197,16 @@ export default function SettingsPage() {
     setSaved(true);
     try {
       await apiRequest("/auth/me", "PUT", profile);
+      try {
+        const rawUser = localStorage.getItem("user");
+        if (rawUser) {
+          const parsed = JSON.parse(rawUser);
+          Object.assign(parsed, profile);
+          localStorage.setItem("user", JSON.stringify(parsed));
+          window.dispatchEvent(new Event("storage"));
+          window.dispatchEvent(new CustomEvent("user-updated", { detail: parsed }));
+        }
+      } catch {}
     } catch {}
     setTimeout(() => setSaved(false), 3000);
   };
@@ -149,22 +254,100 @@ export default function SettingsPage() {
           {/* Tab 1: Profile Info */}
           {activeTab === "profile" && (
             <form onSubmit={handleSave} className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-xs space-y-6">
-              <div className="flex items-center gap-4 pb-6 border-b border-gray-100">
-                <div className="relative">
-                  <div className="w-16 h-16 rounded-full bg-[#4B9C93] text-white flex items-center justify-center text-xl font-bold">
-                    B
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 pb-6 border-b border-gray-100">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                  onChange={handleAvatarChange}
+                  className="hidden"
+                  aria-hidden="true"
+                />
+
+                <div className="relative shrink-0">
+                  <div
+                    onClick={() => !avatarUploading && fileInputRef.current?.click()}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Change profile photo"
+                    title={avatarUploading ? "Uploading photo..." : "Click to change photo"}
+                    onKeyDown={(e) => {
+                      if ((e.key === "Enter" || e.key === " ") && !avatarUploading) {
+                        e.preventDefault();
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                    className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-xl font-bold overflow-hidden border-2 border-gray-100 shadow-xs relative transition-all ${
+                      avatarUploading
+                        ? "cursor-wait opacity-80"
+                        : "cursor-pointer hover:ring-2 hover:ring-[#4B9C93]/40"
+                    }`}
+                  >
+                    {profile.profileIcon ? (
+                      <img
+                        src={profile.profileIcon}
+                        alt={profile.name || "Profile"}
+                        className="w-full h-full object-cover"
+                        onError={() => setProfile((prev) => ({ ...prev, profileIcon: "" }))}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-[#4B9C93] text-white flex items-center justify-center">
+                        {getInitials(profile.name)}
+                      </div>
+                    )}
+
+                    {avatarUploading && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
+                        <Loader2 className="w-5 h-5 text-white animate-spin" />
+                      </div>
+                    )}
                   </div>
+
                   <button
                     type="button"
-                    className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-white border border-gray-200 shadow-2xs hover:bg-gray-50 text-gray-600 cursor-pointer"
+                    onClick={() => !avatarUploading && fileInputRef.current?.click()}
+                    disabled={avatarUploading}
+                    className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-white border border-gray-200 shadow-2xs hover:bg-gray-50 text-gray-600 hover:text-gray-900 cursor-pointer disabled:cursor-not-allowed transition-all"
                     title="Change Photo"
+                    aria-label="Change Photo"
                   >
                     <Camera className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 text-base">{profile.name}</h3>
-                  <p className="text-xs text-gray-400">{profile.college}</p>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-gray-900 text-base truncate">
+                      {profile.name || "User Profile"}
+                    </h3>
+                    {profile.profileIcon && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveAvatar}
+                        disabled={avatarUploading}
+                        className="text-[11px] text-red-500 hover:text-red-700 hover:underline flex items-center gap-1 cursor-pointer transition-colors"
+                        title="Remove custom photo"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Remove photo</span>
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 truncate">{profile.college || "ShowMySkills Member"}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">JPEG, PNG, WebP or SVG under 5MB</p>
+
+                  {avatarError && (
+                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{avatarError}</span>
+                    </p>
+                  )}
+                  {avatarSuccess && (
+                    <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1 font-medium">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>{avatarSuccess}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
