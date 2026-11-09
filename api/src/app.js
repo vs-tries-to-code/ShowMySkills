@@ -209,6 +209,7 @@ app.use((err, req, res, next) => {
     success: false,
     error: isTechnicalDbError ? 'ServiceUnavailable' : (err.name || 'Error'),
     message,
+    ...(err.code ? { code: err.code } : {}),
     ...(isProduction ? {} : { stack: err.stack }),
   });
 });

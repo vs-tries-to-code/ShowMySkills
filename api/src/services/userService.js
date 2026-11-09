@@ -74,12 +74,6 @@ export const userService = {
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
-    const query = {
-      email: normalizedEmail,
-    };
-    if (role) {
-      query.role = role;
-    }
 
     // Pre-check database readiness to avoid hanging on disconnected cluster
     if (mongoose.connection.readyState !== 1) {
@@ -91,9 +85,7 @@ export const userService = {
 
     let user;
     try {
-      user =
-        (await User.findOne(query)) ||
-        (role ? await User.findOne({ email: normalizedEmail }) : null);
+      user = await User.findOne({ email: normalizedEmail });
     } catch (dbErr) {
       if (
         dbErr.name === 'MongoServerSelectionError' ||
@@ -122,6 +114,21 @@ export const userService = {
       const error = new Error('Email or password is incorrect.');
       error.statusCode = 401;
       throw error;
+    }
+
+    if (role) {
+      const expectedRole = String(role).trim().toLowerCase();
+      const actualRole = String(user.role || '').trim().toLowerCase();
+      if (actualRole !== expectedRole) {
+        const article = expectedRole === 'admin' ? 'an' : 'a';
+        const roleLabel = expectedRole.charAt(0).toUpperCase() + expectedRole.slice(1);
+        const error = new Error(
+          `This account is not registered as ${article} ${roleLabel} account. Choose the correct account type.`
+        );
+        error.statusCode = 403;
+        error.code = 'ROLE_MISMATCH';
+        throw error;
+      }
     }
 
     const tokens = await generateTokenPair(user);
