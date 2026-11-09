@@ -480,9 +480,25 @@ export default function DashboardHeader({
                 onClick={() => setShowProfileMenu((prev) => !prev)}
                 id="header-avatar-btn"
                 aria-label="User Profile Menu"
-                className="w-9 h-9 rounded-full bg-[#4B9C93] text-white flex items-center justify-center text-sm font-bold cursor-pointer hover:ring-2 hover:ring-[#4B9C93]/30 transition-all shadow-xs"
+                className="w-9 h-9 rounded-full bg-[#4B9C93] text-white flex items-center justify-center text-sm font-bold cursor-pointer hover:ring-2 hover:ring-[#4B9C93]/30 transition-all shadow-xs overflow-hidden"
               >
-                {user?.name ? user.name.charAt(0).toUpperCase() : (role === "admin" ? "A" : role === "company" ? "C" : role === "college" ? "U" : "S")}
+                {user?.profileIcon ? (
+                  <img
+                    src={user.profileIcon}
+                    alt={user?.name || "Avatar"}
+                    className="w-full h-full object-cover"
+                  />
+                ) : user?.name ? (
+                  user.name.charAt(0).toUpperCase()
+                ) : role === "admin" ? (
+                  "A"
+                ) : role === "company" ? (
+                  "C"
+                ) : role === "college" ? (
+                  "U"
+                ) : (
+                  "S"
+                )}
               </button>
 
               {/* Profile Dropdown Menu */}
