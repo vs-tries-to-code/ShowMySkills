@@ -55,11 +55,19 @@ export function useAuth() {
       };
     }
 
-    try {
-      const stored = localStorage.getItem("user");
-      if (stored) setUser(JSON.parse(stored));
-    } catch (err) {
-      console.error("Failed to read the cached user:", err);
+    const loadCachedUser = () => {
+      try {
+        const stored = localStorage.getItem("user");
+        if (stored) setUser(JSON.parse(stored));
+      } catch (err) {
+        console.error("Failed to read the cached user:", err);
+      }
+    };
+
+    loadCachedUser();
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", loadCachedUser);
+      window.addEventListener("user-updated", loadCachedUser);
     }
 
     authService.getCurrentUser().then((currentUser) => {
@@ -74,6 +82,10 @@ export function useAuth() {
 
     return () => {
       isMounted = false;
+      if (typeof window !== "undefined") {
+        window.removeEventListener("storage", loadCachedUser);
+        window.removeEventListener("user-updated", loadCachedUser);
+      }
     };
   }, []);
 
