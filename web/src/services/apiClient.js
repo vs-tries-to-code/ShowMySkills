@@ -661,6 +661,11 @@ export const supportService = {
 };
 
 export const uploadService = {
+  uploadAvatar: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiRequest("/upload/avatar", "POST", formData);
+  },
   uploadInternshipPoster: async (file) => {
     const formData = new FormData();
     formData.append("file", file);
