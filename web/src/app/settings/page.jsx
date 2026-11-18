@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import DashboardSidebar from "@/components/DashboardSidebar";
 import DashboardHeader from "@/components/DashboardHeader";
+import ResumeManager from "@/components/ResumeManager";
 import { authService, apiRequest } from "@/services/apiClient";
 
 const tabs = [
@@ -45,6 +46,7 @@ export default function SettingsPage() {
     bio: "",
     github: "",
     linkedin: "",
+    resumeUrl: "",
   });
 
   useEffect(() => {
@@ -63,6 +65,7 @@ export default function SettingsPage() {
           bio: user.bio || "",
           github: user.github || "",
           linkedin: user.linkedin || "",
+          resumeUrl: user.resumeUrl || "",
         }));
       }
     });
@@ -246,6 +249,21 @@ export default function SettingsPage() {
                   value={profile.bio}
                   onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-xs sm:text-sm text-gray-900 focus:outline-none focus:border-[#4B9C93]"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-gray-100 space-y-3">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Resume</h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Upload a PDF, DOC, or DOCX file up to 10 MB.
+                  </p>
+                </div>
+                <ResumeManager
+                  resumeUrl={profile.resumeUrl}
+                  onUploaded={(resumeUrl) =>
+                    setProfile((current) => ({ ...current, resumeUrl }))
+                  }
                 />
               </div>
 
