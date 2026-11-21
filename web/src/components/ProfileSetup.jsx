@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Camera, GraduationCap, Plus, Trash2, UserRound } from "lucide-react";
-import { apiRequest } from "@/services/apiClient";
+import ProfileImageEditor from "@/components/ProfileImageEditor";
+import { apiRequest, uploadService } from "@/services/apiClient";
 
 function TagsInput({ id, field, value = [], onChange }) {
   const [input, setInput] = useState("");
@@ -89,6 +90,8 @@ export function ProfileSetup({ role, config }) {
   const [step, setStep] = useState(1);
   const [values, setValues] = useState({});
   const [saveMessage, setSaveMessage] = useState("");
+  const [profileImageEditorFile, setProfileImageEditorFile] = useState(null);
+  const [profileImagePreviewUrl, setProfileImagePreviewUrl] = useState("");
   const [repeatableValues, setRepeatableValues] = useState(() =>
     Object.fromEntries(config.sections.filter((section) => section.repeatable).map((section) => [section.id, [{}]]))
   );
@@ -96,6 +99,17 @@ export function ProfileSetup({ role, config }) {
   const totalSteps = Math.max(...config.sections.map((section) => section.step || 1));
 
   const updateValue = (name, value) => setValues((current) => ({ ...current, [name]: value }));
+
+  useEffect(() => () => {
+    if (profileImagePreviewUrl) URL.revokeObjectURL(profileImagePreviewUrl);
+  }, [profileImagePreviewUrl]);
+
+  const handleProfileImageApply = (file) => {
+    if (profileImagePreviewUrl) URL.revokeObjectURL(profileImagePreviewUrl);
+    setProfileImagePreviewUrl(URL.createObjectURL(file));
+    updateValue("profileImage", file);
+    setProfileImageEditorFile(null);
+  };
 
   const updateRepeatedValue = (sectionId, index, name, value) => {
     setRepeatableValues((current) => ({
@@ -124,8 +138,14 @@ export function ProfileSetup({ role, config }) {
     }
 
     try {
+      let profile = { ...values };
+      if (values.profileImage instanceof File) {
+        const uploadResult = await uploadService.uploadAvatar(values.profileImage);
+        profile.profileIcon = uploadResult?.data?.url || uploadResult?.url || "";
+      }
+      delete profile.profileImage;
       await apiRequest("/auth/me", "PUT", {
-        profile: values,
+        profile,
         sections: repeatableValues,
         role,
       });
@@ -165,11 +185,39 @@ export function ProfileSetup({ role, config }) {
             </label>
             {values.coverImage?.name && <span className="absolute right-3 top-3 max-w-48 truncate rounded bg-white/90 px-2 py-1 text-xs text-slate-600">{values.coverImage.name}</span>}
             <label htmlFor="profile-image" aria-label={config.avatarLabel} className="absolute -bottom-5 left-4 flex h-20 w-20 cursor-pointer items-center justify-center rounded-full border-4 border-white bg-slate-200 text-slate-500 shadow-sm sm:-bottom-7 sm:left-6 sm:h-24 sm:w-24">
-              {role === "student" ? <UserRound className="h-12 w-12 sm:h-14 sm:w-14" /> : <span className="text-sm font-bold sm:text-base">LOGO</span>}
+              {profileImagePreviewUrl ? (
+                <img src={profileImagePreviewUrl} alt="" className="h-full w-full rounded-full object-cover" />
+              ) : role === "student" ? (
+                <UserRound className="h-12 w-12 sm:h-14 sm:w-14" />
+              ) : (
+                <span className="text-sm font-bold sm:text-base">LOGO</span>
+              )}
               <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-white text-slate-700 shadow">
                 <Camera className="h-4 w-4" />
               </span>
-              <input id="profile-image" type="file" accept="image/*" onChange={(event) => updateValue("profileImage", event.target.files?.[0] || null)} className="sr-only" />
+              <input
+                id="profile-image"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  if (!["image/jpeg", "image/png", "image/webp", "image/svg+xml"].includes(file.type)) {
+                    setSaveMessage("Only JPEG, PNG, WebP, and SVG images are allowed.");
+                    event.target.value = "";
+                    return;
+                  }
+                  if (file.size > 5 * 1024 * 1024) {
+                    setSaveMessage("Profile image must be under 5MB.");
+                    event.target.value = "";
+                    return;
+                  }
+                  setSaveMessage("");
+                  setProfileImageEditorFile(file);
+                  event.target.value = "";
+                }}
+                className="sr-only"
+              />
             </label>
             {values.profileImage?.name && <span className="absolute -bottom-8 left-28 max-w-48 truncate text-xs text-slate-500 sm:left-36">{values.profileImage.name}</span>}
           </div>
@@ -234,6 +282,13 @@ export function ProfileSetup({ role, config }) {
             {saveMessage && <p role="status" className="text-center text-sm text-amber-700">{saveMessage}</p>}
           </form>
         </div>
+        {profileImageEditorFile && (
+          <ProfileImageEditor
+            file={profileImageEditorFile}
+            onCancel={() => setProfileImageEditorFile(null)}
+            onApply={handleProfileImageApply}
+          />
+        )}
       </div>
     </main>
   );
