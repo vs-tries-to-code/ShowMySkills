@@ -109,6 +109,7 @@ export default function CompanyInternshipsPage() {
     customDurationUnit: "Months",
     skills: "",
     compensationType: "paid",
+    stipendMode: "range",
     stipendMin: "",
     stipendMax: "",
     description: "",
@@ -135,6 +136,7 @@ export default function CompanyInternshipsPage() {
     customDurationUnit: "Months",
     skills: "",
     compensationType: "paid",
+    stipendMode: "range",
     stipendMin: "",
     stipendMax: "",
     description: "",
@@ -337,6 +339,7 @@ export default function CompanyInternshipsPage() {
       customDurationUnit: parsedDur.customUnit,
       skills: Array.isArray(internship.skills) ? internship.skills.join(", ") : "",
       compensationType: compType,
+      stipendMode: internship.stipendMode || "range",
       stipendMin: internship.stipendMin != null && internship.stipendMin > 0 ? String(internship.stipendMin) : "",
       stipendMax: internship.stipendMax != null && internship.stipendMax > 0 ? String(internship.stipendMax) : "",
       description: internship.description || "",
@@ -399,13 +402,12 @@ export default function CompanyInternshipsPage() {
     if (formState.compensationType === "paid") {
       const min = formState.stipendMin !== "" ? Number(formState.stipendMin) : NaN;
       const max = formState.stipendMax !== "" ? Number(formState.stipendMax) : NaN;
-
-      if (Number.isNaN(min) || Number.isNaN(max)) {
-        errors.stipend = "Both minimum and maximum monthly stipend amounts are required for Paid internships";
-      } else if (min < 0 || max < 0) {
+      if (!Number.isFinite(min) || (formState.stipendMode === "range" && !Number.isFinite(max))) {
+        errors.stipend = formState.stipendMode === "fixed" ? "A valid monthly stipend amount is required" : "Both minimum and maximum monthly stipend amounts are required for Paid internships";
+      } else if (min < 0 || (formState.stipendMode === "range" && max < 0)) {
         errors.stipend = "Stipend amounts cannot be negative";
-      } else if (max <= min) {
-        errors.stipend = "Maximum stipend must be greater than minimum stipend";
+      } else if (formState.stipendMode === "range" && min > max) {
+        errors.stipend = "Minimum stipend cannot exceed maximum stipend";
       }
     } else if (formState.compensationType === "flexible") {
       const hasMin = formState.stipendMin !== "" && formState.stipendMin !== null;
@@ -456,6 +458,7 @@ export default function CompanyInternshipsPage() {
       skills: skillsArray,
       description: formState.description.trim(),
       compensationType: formState.compensationType,
+      stipendMode: formState.stipendMode,
       posterImage: formState.posterImage || "",
     };
 
@@ -463,8 +466,8 @@ export default function CompanyInternshipsPage() {
       const min = Number(formState.stipendMin);
       const max = Number(formState.stipendMax);
       payload.stipendMin = min;
-      payload.stipendMax = max;
-      payload.stipendText = `₹${min.toLocaleString("en-IN")} - ₹${max.toLocaleString("en-IN")} / month`;
+      if (formState.stipendMode === "range") payload.stipendMax = max;
+      payload.stipendText = formState.stipendMode === "fixed" ? `₹${min.toLocaleString("en-IN")} / month` : `₹${min.toLocaleString("en-IN")} - ₹${max.toLocaleString("en-IN")} / month`;
       payload.stipend = payload.stipendText;
     } else if (formState.compensationType === "unpaid") {
       payload.stipendMin = 0;
@@ -604,6 +607,7 @@ export default function CompanyInternshipsPage() {
         customDurationUnit: "Months",
         skills: "",
         compensationType: "paid",
+        stipendMode: "range",
         stipendMin: "",
         stipendMax: "",
         description: "",
@@ -1445,7 +1449,7 @@ export default function CompanyInternshipsPage() {
                   {[
                     { id: "paid", label: "Paid" },
                     { id: "unpaid", label: "Unpaid" },
-                    { id: "flexible", label: "Flexible" },
+                    { id: "skill-based", label: "Skill-based" },
                   ].map((type) => (
                     <button
                       key={type.id}
@@ -1471,15 +1475,16 @@ export default function CompanyInternshipsPage() {
                 {/* Paid: Required Min and Max */}
                 {editModal.compensationType === "paid" && (
                   <div className="pt-2">
-                    <p className="text-[11px] text-slate-500 mb-1.5">
-                      Monthly Stipend Range (₹) *
-                    </p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="flex gap-3 mb-2 text-[11px] text-slate-600">
+                      {["fixed", "range"].map((mode) => <label key={mode} className="flex items-center gap-1"><input type="radio" name="edit-stipend-mode" checked={editModal.stipendMode === mode} onChange={() => setEditModal((prev) => ({ ...prev, stipendMode: mode, stipendMax: mode === "fixed" ? "" : prev.stipendMax }))} />{mode === "fixed" ? "Fixed amount" : "Range"}</label>)}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mb-1.5">{editModal.stipendMode === "fixed" ? "Monthly Stipend (₹) *" : "Monthly Stipend Range (₹) *"}</p>
+                    <div className={`grid ${editModal.stipendMode === "fixed" ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
                       <div>
                         <input
                           type="number"
                           min="0"
-                          placeholder="Min amount (e.g. 15000)"
+                          placeholder={editModal.stipendMode === "fixed" ? "Amount (e.g. 15000)" : "Min amount (e.g. 15000)"}
                           value={editModal.stipendMin}
                           onChange={(e) =>
                             setEditModal((prev) => ({
@@ -1490,7 +1495,7 @@ export default function CompanyInternshipsPage() {
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4B9C93]"
                         />
                       </div>
-                      <div>
+                      {editModal.stipendMode === "range" && <div>
                         <input
                           type="number"
                           min="0"
@@ -1504,7 +1509,7 @@ export default function CompanyInternshipsPage() {
                           }
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4B9C93]"
                         />
-                      </div>
+                      </div>}
                     </div>
                   </div>
                 )}
@@ -1515,6 +1520,7 @@ export default function CompanyInternshipsPage() {
                     This internship is Unpaid. No monetary stipend amount will be saved.
                   </p>
                 )}
+                {editModal.compensationType === "skill-based" && <p className="text-[11px] text-slate-500 italic pt-1">Skill-based compensation. No monetary stipend amount will be saved.</p>}
 
                 {/* Flexible: Optional Range */}
                 {editModal.compensationType === "flexible" && (
@@ -1970,7 +1976,7 @@ export default function CompanyInternshipsPage() {
                   {[
                     { id: "paid", label: "Paid" },
                     { id: "unpaid", label: "Unpaid" },
-                    { id: "flexible", label: "Flexible" },
+                    { id: "skill-based", label: "Skill-based" },
                   ].map((type) => (
                     <button
                       key={type.id}
@@ -1996,15 +2002,16 @@ export default function CompanyInternshipsPage() {
                 {/* Paid: Required Min and Max */}
                 {createModal.compensationType === "paid" && (
                   <div className="pt-2">
-                    <p className="text-[11px] text-slate-500 mb-1.5">
-                      Monthly Stipend Range (₹) *
-                    </p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="flex gap-3 mb-2 text-[11px] text-slate-600">
+                      {["fixed", "range"].map((mode) => <label key={mode} className="flex items-center gap-1"><input type="radio" name="create-stipend-mode" checked={createModal.stipendMode === mode} onChange={() => setCreateModal((prev) => ({ ...prev, stipendMode: mode, stipendMax: mode === "fixed" ? "" : prev.stipendMax }))} />{mode === "fixed" ? "Fixed amount" : "Range"}</label>)}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mb-1.5">{createModal.stipendMode === "fixed" ? "Monthly Stipend (₹) *" : "Monthly Stipend Range (₹) *"}</p>
+                    <div className={`grid ${createModal.stipendMode === "fixed" ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
                       <div>
                         <input
                           type="number"
                           min="0"
-                          placeholder="Min amount (e.g. 15000)"
+                          placeholder={createModal.stipendMode === "fixed" ? "Amount (e.g. 15000)" : "Min amount (e.g. 15000)"}
                           value={createModal.stipendMin}
                           onChange={(e) =>
                             setCreateModal((prev) => ({
@@ -2015,7 +2022,7 @@ export default function CompanyInternshipsPage() {
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4B9C93]"
                         />
                       </div>
-                      <div>
+                      {createModal.stipendMode === "range" && <div>
                         <input
                           type="number"
                           min="0"
@@ -2029,7 +2036,7 @@ export default function CompanyInternshipsPage() {
                           }
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4B9C93]"
                         />
-                      </div>
+                      </div>}
                     </div>
                   </div>
                 )}
@@ -2040,6 +2047,7 @@ export default function CompanyInternshipsPage() {
                     This internship is Unpaid. No monetary stipend amount will be saved.
                   </p>
                 )}
+                {createModal.compensationType === "skill-based" && <p className="text-[11px] text-slate-500 italic pt-1">Skill-based compensation. No monetary stipend amount will be saved.</p>}
 
                 {/* Flexible: Optional Range */}
                 {createModal.compensationType === "flexible" && (

@@ -7,12 +7,12 @@ import { uploadService as webUploadService } from '../web/src/services/apiClient
 import Internship from '../api/src/models/Internship.js';
 
 // Helper to run validateInternshipPayload
-const runValidation = (body) => {
+const runValidation = (body, method = 'PUT') => {
   let statusCode = null;
   let jsonResponse = null;
   let nextCalled = false;
 
-  const req = { body };
+  const req = { body, method };
   const res = {
     status: (code) => {
       statusCode = code;
@@ -157,12 +157,11 @@ test('Compensation: Paid requires valid min and max amounts', () => {
   const invalidRange = runValidation({ compensationType: 'paid', stipendMin: 25000, stipendMax: 20000 });
   assert.strictEqual(invalidRange.nextCalled, false);
   assert.strictEqual(invalidRange.statusCode, 400);
-  assert.match(invalidRange.jsonResponse.message, /Maximum stipend must be greater than minimum stipend/);
+  assert.match(invalidRange.jsonResponse.message, /Minimum stipend cannot exceed maximum stipend/);
 
   const equalRange = runValidation({ compensationType: 'paid', stipendMin: 20000, stipendMax: 20000 });
-  assert.strictEqual(equalRange.nextCalled, false);
-  assert.strictEqual(equalRange.statusCode, 400);
-  assert.match(equalRange.jsonResponse.message, /Maximum stipend must be greater than minimum stipend/);
+  assert.strictEqual(equalRange.nextCalled, true);
+  assert.strictEqual(equalRange.body.stipendMax, 20000);
 
   const validPaid = runValidation({ compensationType: 'paid', stipendMin: 15000, stipendMax: 25000 });
   assert.strictEqual(validPaid.nextCalled, true);
@@ -170,6 +169,21 @@ test('Compensation: Paid requires valid min and max amounts', () => {
   assert.strictEqual(validPaid.body.stipendMin, 15000);
   assert.strictEqual(validPaid.body.stipendMax, 25000);
   assert.match(validPaid.body.stipendText, /15,000.*25,000/);
+});
+
+test('Compensation: Paid supports a fixed amount and rejects incompatible or invalid values', () => {
+  const fixed = runValidation({ compensationType: 'paid', stipendMode: 'fixed', stipendMin: '25000' });
+  assert.equal(fixed.nextCalled, true);
+  assert.equal(fixed.body.stipendMin, 25000);
+  assert.equal(fixed.body.stipendMax, 25000);
+  assert.equal(fixed.body.stipendText, '₹25,000 / month');
+
+  for (const stipendMin of ['-1', 'nope', 'Infinity']) {
+    const invalid = runValidation({ compensationType: 'paid', stipendMode: 'fixed', stipendMin });
+    assert.equal(invalid.nextCalled, false);
+  }
+  const incompatible = runValidation({ compensationType: 'paid', stipendMode: 'fixed', stipendMin: 1000, stipendMax: 2000 });
+  assert.equal(incompatible.nextCalled, false);
 });
 
 test('Compensation: Unpaid saves zero amounts and sets Unpaid label', () => {
@@ -205,13 +219,31 @@ test('Compensation: Flexible allows optional range and enforces validation if en
   assert.match(flexibleValid.body.stipendText, /Flexible/);
 });
 
+test('Compensation: Skill-based stores no monetary stipend', () => {
+  const result = runValidation({ compensationType: 'skill-based', stipendMin: 12000, stipendMax: 25000 });
+  assert.equal(result.nextCalled, true);
+  assert.equal(result.body.compensationType, 'skill-based');
+  assert.equal(result.body.stipendMin, 0);
+  assert.equal(result.body.stipendMax, 0);
+  assert.equal(result.body.stipendText, 'Skill-based');
+});
+
+test('Compensation: Missing type preserves the existing paid default; unknown types are rejected', () => {
+  const missing = runValidation({ role: 'Intern', duration: '3 Months', skills: ['JavaScript'], stipendMin: 10000, stipendMax: 15000 }, 'POST');
+  assert.equal(missing.nextCalled, true);
+  assert.equal(missing.body.compensationType, 'paid');
+  const invalid = runValidation({ role: 'Intern', duration: '3 Months', skills: ['JavaScript'], compensationType: 'equity' }, 'POST');
+  assert.equal(invalid.nextCalled, false);
+});
+
 // ──── Poster Image & Storage Tests ────
 
 test('Poster Image: Schema defines posterImage and compensationType', () => {
   const schema = Internship.schema.paths;
   assert.ok(schema.posterImage, 'posterImage path must exist in Internship schema');
   assert.ok(schema.compensationType, 'compensationType path must exist in Internship schema');
-  assert.deepStrictEqual(schema.compensationType.enumValues, ['paid', 'unpaid', 'flexible']);
+  assert.deepStrictEqual(schema.compensationType.enumValues, ['paid', 'unpaid', 'skill-based', 'flexible']);
+  assert.deepStrictEqual(schema.stipendMode.enumValues, ['fixed', 'range']);
 });
 
 test('Poster Image Upload Controller: rejects request without file', async () => {

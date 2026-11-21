@@ -88,6 +88,7 @@ function CompanyApplicationsContent() {
     customDurationUnit: "Months",
     skills: "",
     compensationType: "paid",
+    stipendMode: "range",
     stipendMin: "",
     stipendMax: "",
     description: "",
@@ -305,12 +306,12 @@ function CompanyApplicationsContent() {
     if (postForm.compensationType === "paid") {
       const min = postForm.stipendMin !== "" ? Number(postForm.stipendMin) : NaN;
       const max = postForm.stipendMax !== "" ? Number(postForm.stipendMax) : NaN;
-      if (Number.isNaN(min) || Number.isNaN(max)) {
-        errors.stipend = "Both minimum and maximum monthly stipend amounts are required.";
-      } else if (min < 0 || max < 0) {
+      if (!Number.isFinite(min) || (postForm.stipendMode === "range" && !Number.isFinite(max))) {
+        errors.stipend = postForm.stipendMode === "fixed" ? "A valid monthly stipend amount is required." : "Both minimum and maximum monthly stipend amounts are required.";
+      } else if (min < 0 || (postForm.stipendMode === "range" && max < 0)) {
         errors.stipend = "Stipend amounts cannot be negative.";
-      } else if (max <= min) {
-        errors.stipend = "Maximum stipend must be greater than minimum stipend.";
+      } else if (postForm.stipendMode === "range" && min > max) {
+        errors.stipend = "Minimum stipend cannot exceed maximum stipend.";
       }
     } else if (postForm.compensationType === "flexible") {
       const hasMin = postForm.stipendMin !== "" && postForm.stipendMin !== null;
@@ -348,7 +349,7 @@ function CompanyApplicationsContent() {
     if (postForm.compensationType === "paid") {
       stipendMin = Number(postForm.stipendMin);
       stipendMax = Number(postForm.stipendMax);
-      stipendText = `₹${stipendMin.toLocaleString("en-IN")} - ₹${stipendMax.toLocaleString("en-IN")} / month`;
+      stipendText = postForm.stipendMode === "fixed" ? `₹${stipendMin.toLocaleString("en-IN")} / month` : `₹${stipendMin.toLocaleString("en-IN")} - ₹${stipendMax.toLocaleString("en-IN")} / month`;
     } else if (postForm.compensationType === "flexible") {
       if (postForm.stipendMin !== "" && postForm.stipendMax !== "") {
         stipendMin = Number(postForm.stipendMin);
@@ -370,8 +371,9 @@ function CompanyApplicationsContent() {
       department: resolvedDepartment,
       track: resolvedTrack,
       compensationType: postForm.compensationType,
+      stipendMode: postForm.stipendMode,
       stipendMin,
-      stipendMax,
+      ...(postForm.compensationType === "paid" && postForm.stipendMode === "fixed" ? {} : { stipendMax }),
       stipendText,
       stipend: stipendText,
       posterImage: postForm.posterImage || "",
@@ -408,6 +410,7 @@ function CompanyApplicationsContent() {
       customDurationUnit: "Months",
       skills: "",
       compensationType: "paid",
+      stipendMode: "range",
       stipendMin: "",
       stipendMax: "",
       description: "",
@@ -1089,7 +1092,7 @@ function CompanyApplicationsContent() {
                       {[
                         { id: "paid", label: "Paid" },
                         { id: "unpaid", label: "Unpaid" },
-                        { id: "flexible", label: "Flexible" },
+                        { id: "skill-based", label: "Skill-based" },
                       ].map((type) => (
                         <button
                           key={type.id}
@@ -1117,10 +1120,9 @@ function CompanyApplicationsContent() {
                     {/* Paid: Required Min and Max */}
                     {postForm.compensationType === "paid" && (
                       <div className="pt-2">
-                        <p className="text-[11px] text-gray-500 mb-1.5 font-medium">
-                          Monthly Stipend Range (₹) *
-                        </p>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="flex gap-3 mb-2 text-[11px] text-gray-600">{["fixed", "range"].map((mode) => <label key={mode} className="flex items-center gap-1"><input type="radio" name="post-stipend-mode" checked={postForm.stipendMode === mode} onChange={() => setPostForm((prev) => ({ ...prev, stipendMode: mode, stipendMax: mode === "fixed" ? "" : prev.stipendMax }))} />{mode === "fixed" ? "Fixed amount" : "Range"}</label>)}</div>
+                        <p className="text-[11px] text-gray-500 mb-1.5 font-medium">{postForm.stipendMode === "fixed" ? "Monthly Stipend (₹) *" : "Monthly Stipend Range (₹) *"}</p>
+                        <div className={`grid ${postForm.stipendMode === "fixed" ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
                           <input
                             type="number"
                             min="0"
@@ -1137,7 +1139,7 @@ function CompanyApplicationsContent() {
                             }}
                             className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-[#4B9C93]"
                           />
-                          <input
+                          {postForm.stipendMode === "range" && <input
                             type="number"
                             min="0"
                             placeholder="Max (e.g. 25000)"
@@ -1152,7 +1154,7 @@ function CompanyApplicationsContent() {
                               }
                             }}
                             className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-[#4B9C93]"
-                          />
+                          />}
                         </div>
                       </div>
                     )}
@@ -1163,6 +1165,7 @@ function CompanyApplicationsContent() {
                         This internship is Unpaid. No monetary stipend amount will be saved.
                       </p>
                     )}
+                    {postForm.compensationType === "skill-based" && <p className="text-[11px] text-gray-500 italic pt-1">Skill-based compensation. No monetary stipend amount will be saved.</p>}
 
                     {/* Flexible: Optional Range */}
                     {postForm.compensationType === "flexible" && (

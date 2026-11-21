@@ -50,8 +50,13 @@ const internshipSchema = new mongoose.Schema(
     },
     compensationType: {
       type: String,
-      enum: ['paid', 'unpaid', 'flexible'],
+      enum: ['paid', 'unpaid', 'skill-based', 'flexible'],
       default: 'paid',
+    },
+    stipendMode: {
+      type: String,
+      enum: ['fixed', 'range'],
+      default: 'range',
     },
     stipend: {
       type: String,

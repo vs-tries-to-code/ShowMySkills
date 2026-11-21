@@ -4,7 +4,7 @@
  */
 
 export const validateInternshipPayload = (req, res, next) => {
-  const { department, track, mode, location, duration, skills, compensationType, stipendMin, stipendMax } = req.body;
+  const { department, track, mode, location, duration, skills, compensationType, stipendMode, stipendMin, stipendMax } = req.body;
   const isCreatePayload = req.method === 'POST' && req.body.role !== undefined;
 
   // 1. Department validation
@@ -114,46 +114,61 @@ export const validateInternshipPayload = (req, res, next) => {
   }
 
   // 6. Compensation validation
-  if (isCreatePayload || compensationType !== undefined || stipendMin !== undefined || stipendMax !== undefined) {
-    const compType = String(compensationType || 'paid').toLowerCase();
+  if (isCreatePayload || compensationType !== undefined || stipendMode !== undefined || stipendMin !== undefined || stipendMax !== undefined) {
+    const compType = String(compensationType || 'paid').trim().toLowerCase();
 
     if (compType === 'paid') {
-      const min = stipendMin !== undefined && stipendMin !== null && stipendMin !== '' ? Number(stipendMin) : NaN;
-      const max = stipendMax !== undefined && stipendMax !== null && stipendMax !== '' ? Number(stipendMax) : NaN;
-
-      if (!Number.isFinite(min) || !Number.isFinite(max)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Minimum and maximum monthly stipend amounts are required for Paid internships',
-        });
+      // Omitted mode remains a range for older API clients that send both values.
+      const modeValue = stipendMode === undefined ? 'range' : String(stipendMode).trim().toLowerCase();
+      if (!['fixed', 'range'].includes(modeValue)) {
+        return res.status(400).json({ success: false, message: 'Stipend mode must be fixed or range' });
       }
-
-      if (min < 0 || max < 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Stipend amounts cannot be negative',
-        });
+      const hasMin = stipendMin !== undefined && stipendMin !== null && stipendMin !== '';
+      const hasMax = stipendMax !== undefined && stipendMax !== null && stipendMax !== '';
+      const isValidAmount = (value) => typeof value === 'number'
+        ? Number.isFinite(value)
+        : typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value.trim());
+      const min = hasMin ? Number(stipendMin) : NaN;
+      const max = hasMax ? Number(stipendMax) : NaN;
+      if (!hasMin || !isValidAmount(stipendMin) || (modeValue === 'range' && (!hasMax || !isValidAmount(stipendMax)))) {
+        return res.status(400).json({ success: false, message: modeValue === 'fixed' ? 'A valid stipend amount is required for Paid internships' : 'Minimum and maximum monthly stipend amounts are required for Paid internships' });
       }
-
-      if (max <= min) {
-        return res.status(400).json({
-          success: false,
-          message: 'Maximum stipend must be greater than minimum stipend',
-        });
+      if (modeValue === 'fixed' && hasMax) {
+        return res.status(400).json({ success: false, message: 'Fixed stipend cannot include a maximum stipend value' });
       }
-
+      if (modeValue === 'range' && !hasMax) {
+        return res.status(400).json({ success: false, message: 'Range stipend requires both minimum and maximum amounts' });
+      }
+      const savedMax = modeValue === 'fixed' ? min : max;
+      if (min < 0 || savedMax < 0) {
+        return res.status(400).json({ success: false, message: 'Stipend amounts cannot be negative' });
+      }
+      if (modeValue === 'range' && min > max) {
+        return res.status(400).json({ success: false, message: 'Minimum stipend cannot exceed maximum stipend' });
+      }
       req.body.compensationType = 'paid';
+      req.body.stipendMode = modeValue;
       req.body.stipendMin = min;
-      req.body.stipendMax = max;
-      const formatted = `₹${min.toLocaleString('en-IN')} - ₹${max.toLocaleString('en-IN')} / month`;
+      req.body.stipendMax = savedMax;
+      const formatted = modeValue === 'fixed'
+        ? `₹${min.toLocaleString('en-IN')} / month`
+        : `₹${min.toLocaleString('en-IN')} - ₹${max.toLocaleString('en-IN')} / month`;
       req.body.stipendText = formatted;
       req.body.stipend = formatted;
     } else if (compType === 'unpaid') {
       req.body.compensationType = 'unpaid';
+      req.body.stipendMode = null;
       req.body.stipendMin = 0;
       req.body.stipendMax = 0;
       req.body.stipendText = 'Unpaid';
       req.body.stipend = 'Unpaid';
+    } else if (compType === 'skill-based') {
+      req.body.compensationType = 'skill-based';
+      req.body.stipendMode = null;
+      req.body.stipendMin = 0;
+      req.body.stipendMax = 0;
+      req.body.stipendText = 'Skill-based';
+      req.body.stipend = 'Skill-based';
     } else if (compType === 'flexible') {
       req.body.compensationType = 'flexible';
       const hasMin = stipendMin !== undefined && stipendMin !== null && stipendMin !== '';
@@ -196,7 +211,7 @@ export const validateInternshipPayload = (req, res, next) => {
         req.body.stipend = 'Flexible';
       }
     } else {
-      return res.status(400).json({ success: false, message: 'Compensation type must be paid, unpaid, or flexible' });
+      return res.status(400).json({ success: false, message: 'Compensation type must be paid, unpaid, skill-based, or flexible' });
     }
   }
 

@@ -18,6 +18,11 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+test('Compensation display formats fixed and skill-based internships', () => {
+  assert.equal(formatStipend({ compensationType: 'paid', stipendMode: 'fixed', stipendMin: 25000, stipendMax: 25000 }), '₹25,000');
+  assert.equal(formatStipend({ compensationType: 'skill-based', stipendMin: 0, stipendMax: 0, stipendText: 'Skill-based' }), 'Skill-based');
+});
+
 // ─────────────────────────────────────────────────────────────
 // TEST 1: Reload returns previously Interested/Accepted, Saved, and Rejected/Skipped active internships
 // ─────────────────────────────────────────────────────────────

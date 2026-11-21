@@ -13,10 +13,14 @@ export function formatStipend(item) {
   ) {
     return "Unpaid";
   }
+  if (item.compensationType === "skill-based") return "Skill-based";
 
   const min = item.stipendMin;
   const max = item.stipendMax;
 
+  if (item.stipendMode === "fixed" && min != null && min > 0) {
+    return `₹${Number(min).toLocaleString("en-IN")}`;
+  }
   if (min != null && max != null && (min > 0 || max > 0)) {
     return `₹${Number(min).toLocaleString("en-IN")} - ₹${Number(
       max
