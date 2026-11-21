@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import DashboardSidebar from "@/components/DashboardSidebar";
 import DashboardHeader from "@/components/DashboardHeader";
+import ProfileImageEditor from "@/components/ProfileImageEditor";
 import { authService, apiRequest, uploadService } from "@/services/apiClient";
 
 const tabs = [
@@ -55,6 +56,7 @@ export default function SettingsPage() {
   const [avatarError, setAvatarError] = useState("");
   const [avatarSuccess, setAvatarSuccess] = useState("");
   const fileInputRef = useRef(null);
+  const [avatarEditorFile, setAvatarEditorFile] = useState(null);
 
   const getInitials = (name) => {
     if (!name || !name.trim()) return "U";
@@ -88,7 +90,7 @@ export default function SettingsPage() {
     };
   }, []);
 
-  const handleAvatarChange = async (e) => {
+  const handleAvatarChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -107,6 +109,11 @@ export default function SettingsPage() {
       return;
     }
 
+    setAvatarSuccess("");
+    setAvatarEditorFile(file);
+  };
+
+  const handleAvatarApply = async (file) => {
     setAvatarError("");
     setAvatarUploading(true);
     try {
@@ -116,6 +123,7 @@ export default function SettingsPage() {
         setProfile((prev) => ({ ...prev, profileIcon: url }));
         setAvatarSuccess("Profile photo updated successfully!");
         setTimeout(() => setAvatarSuccess(""), 3000);
+        setAvatarEditorFile(null);
 
         // Synchronize local storage user cache and dispatch events
         try {
@@ -467,6 +475,14 @@ export default function SettingsPage() {
                 </button>
               </div>
             </form>
+          )}
+
+          {avatarEditorFile && (
+            <ProfileImageEditor
+              file={avatarEditorFile}
+              onCancel={() => setAvatarEditorFile(null)}
+              onApply={handleAvatarApply}
+            />
           )}
 
           {/* Tab 2: Account & Security */}
