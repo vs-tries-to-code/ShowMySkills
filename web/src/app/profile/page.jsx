@@ -33,6 +33,7 @@ function formatProfileData(u) {
     topPercentile: u.topPercentile || "Student Engineer",
     metrics: u.metrics || [],
     aboutText: u.bio || u.aboutText || "",
+    resumeUrl: u.resumeUrl || "",
     skillsList: Array.isArray(u.skills) && u.skills.length > 0
       ? u.skills.map((s) => (typeof s === "string" ? { name: s, level: "advanced" } : s))
       : [],
@@ -91,7 +92,12 @@ export default function StudentProfilePage() {
             ) : data ? (
               <>
                 {/* Profile Identity Card */}
-                <ProfileHeader data={data} />
+                <ProfileHeader
+                  data={data}
+                  onResumeUploaded={(resumeUrl) =>
+                    setData((current) => ({ ...current, resumeUrl }))
+                  }
+                />
 
                 {/* Profile Completion Progress */}
                 <CompletionBanner percentage={data.completionPercentage} />
