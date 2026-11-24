@@ -111,6 +111,12 @@ export const uploadInternshipPoster = multer({
   fileFilter: imageFilter,
 });
 
+// Centralized Object Storage In-Memory Upload
+export const uploadMemory = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+});
+
 export const formatFileUrl = (req, file, subfolder) => {
   const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5000}/api`;
   const rootUrl = baseUrl.replace(/\/api\/?$/, '');

@@ -1,6 +1,7 @@
 "use client";
 
 import { BadgeCheck, Pencil } from "lucide-react";
+import { BadgeCheck, Pencil, Download } from "lucide-react";
 import Link from "next/link";
 import StudentRoleTag from "@/components/StudentRoleTag";
 import ResumeManager from "@/components/ResumeManager";

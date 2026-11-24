@@ -9,6 +9,8 @@ const projectSchema = new mongoose.Schema(
     verified: { type: Boolean, default: false },
     repoUrl: { type: String, default: '' },
     liveUrl: { type: String, default: '' },
+    fileId: { type: String, default: null },
+    mediaUrl: { type: String, default: null },
   },
   { _id: false }
 );
@@ -32,6 +34,7 @@ const certificationSchema = new mongoose.Schema(
     issuingOrganization: { type: String, default: '' },
     validationDate: { type: Date },
     certificateFile: { type: String, default: '' },
+    certificateFileId: { type: String, default: null },
     isVerified: { type: Boolean, default: false },
   },
   { _id: false }
@@ -42,6 +45,7 @@ const achievementSchema = new mongoose.Schema(
     achievement: { type: String, required: true },
     year: { type: Number },
     proofFile: { type: String, default: '' },
+    proofFileId: { type: String, default: null },
   },
   { _id: false }
 );
@@ -109,6 +113,10 @@ const userSchema = new mongoose.Schema(
       default: '',
     },
     profileIcon: {
+      type: String,
+      default: null,
+    },
+    profileIconFileId: {
       type: String,
       default: null,
     },
@@ -223,6 +231,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    resumeFileId: {
+      type: String,
+      default: null,
+    },
     portfolioUrl: {
       type: String,
       default: '',
@@ -244,6 +256,7 @@ const userSchema = new mongoose.Schema(
     companyProfile: {
       companyName: { type: String, default: '' },
       logo: { type: String, default: '' },
+      logoFileId: { type: String, default: null },
       tagline: { type: String, default: '' },
       aboutCompany: { type: String, default: '' },
       establishedYear: { type: Number },
