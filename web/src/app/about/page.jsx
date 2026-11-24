@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Users,
@@ -17,9 +16,6 @@ import {
   Rocket,
   GraduationCap,
   Code2,
-  User,
-  Linkedin,
-  Github,
 } from "lucide-react";
 import {
   getUserDashboardPath,
@@ -27,93 +23,10 @@ import {
   useAuth,
 } from "@/hooks/useAuth";
 
-const MAJOR_CONTRIBUTORS = [
-  {
-    id: "s-sidharth",
-    name: "S. Sidharth",
-    image: "/contributors/s-sidharth.png",
-  },
-  {
-    id: "joel-a-jacob",
-    name: "Joel A Jacob",
-    image: "/contributors/joel-a-jacob.png",
-  },
-  {
-    id: "akash-nadar",
-    name: "Akash Nadar",
-    image: null,
-  },
-  {
-    id: "krithi-kushwaha",
-    name: "Krithi Kushwaha",
-    image: null,
-  },
-  {
-    id: "palla-bindhu",
-    name: "Palla Bindhu",
-    image: "/contributors/palla-bindhu.jpg.png",
-  },
-  {
-    id: "priyanshi-bhati",
-    name: "Priyanshi Bhati",
-    image: "/contributors/priyanshi-bhati.png",
-  },
-  {
-    id: "priyanshu",
-    name: "Priyanshu",
-    image: null,
-  },
-  {
-    id: "vishnusree",
-    name: "VishnuSree",
-    image: null,
-  },
-];
-
-function shuffleContributors(list) {
-  const array = [...list];
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
-  }
-  return array;
-}
-
-function ContributorAvatar({ name, image }) {
-  const [hasError, setHasError] = useState(false);
-
-  useEffect(() => {
-    setHasError(false);
-  }, [image]);
-
-  if (!image || hasError) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-[#E6F7F3] text-[#4B9C93]">
-        <User className="w-14 h-14 sm:w-16 sm:h-16 text-[#4B9C93]/60" strokeWidth={1.5} />
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={image}
-      alt={name}
-      onError={() => setHasError(true)}
-      className="w-full h-full object-cover object-top filter grayscale contrast-[1.02] transition-all duration-300 group-hover:grayscale-0 group-focus-within:grayscale-0 group-active:grayscale-0 active:grayscale-0 group-hover:contrast-100 group-hover:scale-105 group-focus-within:scale-105 motion-reduce:transition-none motion-reduce:transform-none"
-    />
-  );
-}
-
 export default function AboutPage() {
   const { user, authResolved, hasSession } = useAuth();
   const accountPath = getUserDashboardPath(user);
   const internshipsPath = getUserInternshipsPath(user);
-
-  const [contributors, setContributors] = useState(MAJOR_CONTRIBUTORS);
-
-  useEffect(() => {
-    setContributors(shuffleContributors(MAJOR_CONTRIBUTORS));
-  }, []);
 
   return (
     <div className="min-h-screen bg-[#4B9C93] flex flex-col font-sans selection:text-white">
@@ -709,70 +622,6 @@ export default function AboutPage() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ──── Section 7: Major Contributors ──── */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-[#F4FAF8] via-[#FAFDFB] to-white py-14 sm:py-20 px-4 sm:px-8 md:px-12 lg:px-20 border-b border-gray-200/80">
-        {/* Subtle decorative ambient green/teal accents */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full pointer-events-none overflow-hidden opacity-60">
-          <div className="absolute -top-24 left-1/4 w-96 h-96 bg-[#4B9C93]/10 rounded-full blur-3xl" />
-          <div className="absolute top-1/2 right-1/4 w-80 h-80 bg-[#10B981]/10 rounded-full blur-3xl" />
-        </div>
-
-        <div className="relative max-w-6xl mx-auto">
-          {/* Section Header */}
-          <div className="text-center max-w-2xl mx-auto">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E6F7F3] border border-[#4B9C93]/20 text-[#0D9488] text-xs font-bold uppercase tracking-wider mb-2 shadow-2xs">
-              <Users className="w-3.5 h-3.5 text-[#0D9488]" />
-              <span>Our Team</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#101828] tracking-tight">
-              Major Contributors
-            </h2>
-            <p className="mt-2 text-[#4A5565] text-xs sm:text-sm md:text-base">
-              The builders and creators behind the ShowMySkills platform.
-            </p>
-          </div>
-
-          {/* Contributors Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6 mt-8 sm:mt-12 max-w-sm sm:max-w-none mx-auto">
-            {contributors.map((contributor) => (
-              <div
-                key={contributor.id}
-                tabIndex={0}
-                className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-[#4B9C93]/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4B9C93] transition-all flex flex-col items-center text-center group cursor-pointer sm:cursor-default"
-              >
-                {/* Square/Rectangular Photo Area */}
-                <div className="w-full aspect-square rounded-xl overflow-hidden mb-3.5 bg-[#E6F7F3] border border-[#4B9C93]/20 flex items-center justify-center relative shadow-inner">
-                  <ContributorAvatar name={contributor.name} image={contributor.image} />
-                </div>
-
-                {/* Contributor Name (directly below image) */}
-                <h3 className="text-base sm:text-lg font-bold text-[#101828] tracking-tight leading-snug">
-                  {contributor.name}
-                </h3>
-
-                {/* Non-clickable LinkedIn and GitHub icon placeholders (below name) */}
-                <div className="mt-2.5 flex items-center justify-center gap-2">
-                  <span
-                    className="w-8 h-8 rounded-full bg-[#E6F7F3]/70 border border-[#4B9C93]/25 text-[#4B9C93] flex items-center justify-center cursor-default shadow-2xs select-none transition-colors"
-                    title="LinkedIn profile (coming soon)"
-                    aria-label="LinkedIn placeholder"
-                  >
-                    <Linkedin className="w-3.5 h-3.5" />
-                  </span>
-                  <span
-                    className="w-8 h-8 rounded-full bg-[#E6F7F3]/70 border border-[#4B9C93]/25 text-[#4B9C93] flex items-center justify-center cursor-default shadow-2xs select-none transition-colors"
-                    title="GitHub profile (coming soon)"
-                    aria-label="GitHub placeholder"
-                  >
-                    <Github className="w-3.5 h-3.5" />
-                  </span>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </section>
