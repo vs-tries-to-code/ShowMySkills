@@ -38,6 +38,10 @@ const internshipSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    posterImageFileId: {
+      type: String,
+      default: null,
+    },
     department: {
       type: String,
       default: '',

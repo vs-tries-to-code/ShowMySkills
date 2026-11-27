@@ -108,6 +108,10 @@ Features role-based access control (Student, Company, College, Admin), ATS job a
         description: 'Secure file upload endpoints for profile avatars, resumes, certificates, and logos.',
       },
       {
+        name: 'Centralized Storage',
+        description: 'XyphX Centralized Object Storage Service integration (storage.xyphx.com) for CDN media delivery.',
+      },
+      {
         name: 'Support & FAQ',
         description: 'Helpdesk support ticket submissions and searchable platform knowledge base FAQs.',
       },

@@ -1,5 +1,6 @@
 import Application from '../models/Application.js';
 import Internship from '../models/Internship.js';
+import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 
 export const applicationController = {
@@ -136,19 +137,40 @@ export const applicationController = {
       const { id } = req.params;
       const { status, notes, interviewDate } = req.body;
 
-      const updateData = {};
-      if (status) updateData.status = status;
-      if (notes !== undefined) updateData.notes = notes;
-      if (interviewDate) updateData.interviewDate = new Date(interviewDate);
+      if (!['company', 'admin'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the associated company or an admin can update application status',
+        });
+      }
 
-      const application = await Application.findByIdAndUpdate(
-        id,
-        { $set: updateData },
-        { new: true }
-      );
-
+      const application = await Application.findById(id);
       if (!application) {
         return res.status(404).json({ success: false, message: 'Application not found' });
+      }
+      if (
+        req.user.role === 'company' &&
+        String(application.company) !== String(req.user.id)
+      ) {
+        return res.status(404).json({ success: false, message: 'Application not found' });
+      }
+
+      const previousStatus = application.status;
+
+      if (status) application.status = status;
+      if (notes !== undefined) application.notes = notes;
+      if (interviewDate) application.interviewDate = new Date(interviewDate);
+      await application.save();
+
+      if (status && status !== previousStatus) {
+        const readableStatus = application.status.replaceAll('_', ' ');
+        await Notification.create({
+          user: application.student,
+          title: 'Application status updated',
+          desc: `${application.companyName} updated your application for ${application.roleTitle} to ${readableStatus}.`,
+          type: 'application',
+          link: '/student/applications',
+        });
       }
 
       res.json({

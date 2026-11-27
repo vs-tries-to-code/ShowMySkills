@@ -26,6 +26,7 @@ import verificationRoutes from './routes/verificationRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
+import mediaRoutes from './routes/mediaRoutes.js';
 import skillRoutes from './routes/skillRoutes.js';
 import bookmarkRoutes from './routes/bookmarkRoutes.js';
 import monitoringRoutes from './routes/monitoringRoutes.js';
@@ -108,6 +109,9 @@ apiRouter.use('/users', userRoutes);
 
 // Centralized File Uploads: /api/upload/*
 apiRouter.use('/upload', uploadRoutes);
+
+// XyphX Centralized Object Storage Media: /api/media/*
+apiRouter.use('/media', mediaRoutes);
 
 // Skill Benchmarks & Verification Tests: /api/skills/*
 apiRouter.use('/skills', skillRoutes);

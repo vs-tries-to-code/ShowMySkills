@@ -1,6 +1,18 @@
+import mongoose from 'mongoose';
 import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
 import User from '../models/User.js';
+
+const invalidConversationId = (res) =>
+  res.status(400).json({ success: false, message: 'Invalid conversation ID' });
+
+const conversationNotFound = (res) =>
+  res.status(404).json({ success: false, message: 'Conversation not found' });
+
+const findParticipantConversation = (conversationId, userId) => {
+  if (!mongoose.isValidObjectId(conversationId)) return null;
+  return Conversation.findOne({ _id: conversationId, participants: userId });
+};
 
 export const chatController = {
   // Get all conversations for current user
@@ -39,6 +51,11 @@ export const chatController = {
   getMessages: async (req, res, next) => {
     try {
       const { id } = req.params;
+      if (!mongoose.isValidObjectId(id)) return invalidConversationId(res);
+
+      const conversation = await findParticipantConversation(id, req.user.id);
+      if (!conversation) return conversationNotFound(res);
+
       const messages = await Message.find({ conversationId: id })
         .populate('sender', 'name profileIcon')
         .sort({ createdAt: 1 });
@@ -64,8 +81,27 @@ export const chatController = {
 
       let conv;
       if (conversationId) {
-        conv = await Conversation.findById(conversationId);
+        if (!mongoose.isValidObjectId(conversationId)) return invalidConversationId(res);
+        conv = await findParticipantConversation(conversationId, senderId);
+        if (!conv) return conversationNotFound(res);
       } else {
+        if (!mongoose.isValidObjectId(receiverId)) {
+          return res.status(400).json({
+            success: false,
+            message: 'A valid receiver ID is required',
+          });
+        }
+        if (String(receiverId) === String(senderId)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Cannot start a conversation with yourself',
+          });
+        }
+        const receiver = await User.findById(receiverId).select('_id');
+        if (!receiver) {
+          return res.status(404).json({ success: false, message: 'Recipient not found' });
+        }
+
         // Find existing or create new conversation between sender and receiver
         conv = await Conversation.findOne({
           participants: { $all: [senderId, receiverId] },
@@ -84,6 +120,7 @@ export const chatController = {
       const otherParticipantId = conv.participants.find(
         (p) => p.toString() !== senderId
       );
+      if (!otherParticipantId) return conversationNotFound(res);
 
       const message = await Message.create({
         conversationId: conv._id,
@@ -113,12 +150,15 @@ export const chatController = {
       const { id } = req.params;
       const userId = req.user.id;
 
+      if (!mongoose.isValidObjectId(id)) return invalidConversationId(res);
+      const conv = await findParticipantConversation(id, userId);
+      if (!conv) return conversationNotFound(res);
+
       await Message.updateMany(
         { conversationId: id, receiver: userId, status: { $ne: 'read' } },
         { $set: { status: 'read' } }
       );
 
-      const conv = await Conversation.findById(id);
       if (conv && conv.unreadCounts) {
         conv.unreadCounts.set(userId, 0);
         await conv.save();

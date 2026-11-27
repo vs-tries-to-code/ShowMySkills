@@ -1,13 +1,16 @@
 "use client";
 
+import { BadgeCheck, Pencil } from "lucide-react";
 import { BadgeCheck, Pencil, Download } from "lucide-react";
+import Link from "next/link";
 import StudentRoleTag from "@/components/StudentRoleTag";
+import ResumeManager from "@/components/ResumeManager";
 
 /**
  * ProfileHeader — Top card showing user identity, verification status,
  * action buttons, open-to-work status, and primary skill pills.
  */
-export default function ProfileHeader({ data }) {
+export default function ProfileHeader({ data, onResumeUploaded }) {
   const initials = data.name
     .split(" ")
     .map((n) => n[0])
@@ -73,20 +76,18 @@ export default function ProfileHeader({ data }) {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2 shrink-0">
-              <button
+              <Link
                 id="edit-profile-btn"
+                href="/settings"
                 className="px-4 py-2 rounded-lg border border-[#4B9C93] text-[#4B9C93] text-sm font-semibold hover:bg-[#4B9C93]/5 transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <Pencil className="w-3.5 h-3.5" />
                 Edit Profile
-              </button>
-              <button
-                id="download-resume-btn"
-                className="px-4 py-2 rounded-lg bg-[#4B9C93] text-white text-sm font-semibold hover:bg-[#3d867e] transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm shadow-[#4B9C93]/20"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Download Resume
-              </button>
+              </Link>
+              <ResumeManager
+                resumeUrl={data.resumeUrl}
+                onUploaded={onResumeUploaded}
+              />
             </div>
           </div>
         </div>
